@@ -1,0 +1,69 @@
+using Microsoft.EntityFrameworkCore;
+using SkillHive.Models;
+
+namespace SkillHive.Data
+{
+    public class AppDbContext : DbContext
+    {
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        {
+        }
+
+        public DbSet<User> Users => Set<User>();
+        public DbSet<Academy> Academies => Set<Academy>();
+        public DbSet<VerificationToken> VerificationTokens => Set<VerificationToken>();
+        public DbSet<Notification> Notifications => Set<Notification>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Table names
+            modelBuilder.Entity<User>().ToTable("USERS");
+            modelBuilder.Entity<Academy>().ToTable("ACADEMIES");
+            modelBuilder.Entity<VerificationToken>().ToTable("VERIFICATION_TOKENS");
+            modelBuilder.Entity<Notification>().ToTable("NOTIFICATIONS");
+
+            // Unique constraints
+            modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
+            modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
+            modelBuilder.Entity<Academy>().HasIndex(a => a.Slug).IsUnique();
+            modelBuilder.Entity<VerificationToken>().HasIndex(v => v.Token).IsUnique();
+
+            // Academy -> Owner (User) — no cascade delete
+            modelBuilder.Entity<Academy>()
+                .HasOne(a => a.Owner)
+                .WithMany()
+                .HasForeignKey(a => a.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // User -> Academy — no cascade delete
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Academy)
+                .WithMany()
+                .HasForeignKey(u => u.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // User -> InvitedBy (self-reference) — no cascade delete
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.InvitedBy)
+                .WithMany()
+                .HasForeignKey(u => u.InvitedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // VerificationToken -> User
+            modelBuilder.Entity<VerificationToken>()
+                .HasOne(v => v.User)
+                .WithMany()
+                .HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Notification -> User
+            modelBuilder.Entity<Notification>()
+                .HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        }
+    }
+}
