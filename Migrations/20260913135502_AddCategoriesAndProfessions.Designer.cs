@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SkillHive.Data;
@@ -12,9 +13,11 @@ using SkillHive.Data;
 namespace SkillHive.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913135502_AddCategoriesAndProfessions")]
+    partial class AddCategoriesAndProfessions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -104,9 +107,6 @@ namespace SkillHive.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsGlobal")
                         .HasColumnType("boolean");
 
@@ -132,131 +132,6 @@ namespace SkillHive.Migrations
                         .IsUnique();
 
                     b.ToTable("CATEGORIES", (string)null);
-                });
-
-            modelBuilder.Entity("SkillHive.Models.Course", b =>
-                {
-                    b.Property<int>("CourseId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("CourseId"));
-
-                    b.Property<int>("AcademyId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("ArchivedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal?>("AverageRating")
-                        .HasColumnType("decimal(3,2)");
-
-                    b.Property<string>("CoverImageUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<decimal?>("DiscountPrice")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int?>("EstimatedDurationMinutes")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("InstructorId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsFree")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Language")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<int>("Level")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("LongDescription")
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
-
-                    b.Property<string>("Prerequisites")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<decimal?>("Price")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int>("ProfessionId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PromoVideoUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("TotalEnrollments")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TotalLessons")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TotalReviews")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Visibility")
-                        .HasColumnType("integer");
-
-                    b.HasKey("CourseId");
-
-                    b.HasIndex("AcademyId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("InstructorId");
-
-                    b.HasIndex("ProfessionId");
-
-                    b.HasIndex("Slug", "AcademyId")
-                        .IsUnique();
-
-                    b.ToTable("COURSES", (string)null);
                 });
 
             modelBuilder.Entity("SkillHive.Models.Notification", b =>
@@ -317,9 +192,6 @@ namespace SkillHive.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsGlobal")
                         .HasColumnType("boolean");
@@ -477,41 +349,6 @@ namespace SkillHive.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Academy");
-                });
-
-            modelBuilder.Entity("SkillHive.Models.Course", b =>
-                {
-                    b.HasOne("SkillHive.Models.Academy", "Academy")
-                        .WithMany()
-                        .HasForeignKey("AcademyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SkillHive.Models.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SkillHive.Models.User", "Instructor")
-                        .WithMany()
-                        .HasForeignKey("InstructorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SkillHive.Models.Profession", "Profession")
-                        .WithMany()
-                        .HasForeignKey("ProfessionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Academy");
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("Instructor");
-
-                    b.Navigation("Profession");
                 });
 
             modelBuilder.Entity("SkillHive.Models.Notification", b =>

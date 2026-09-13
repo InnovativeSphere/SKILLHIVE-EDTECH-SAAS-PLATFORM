@@ -9,6 +9,7 @@ using SkillHive.Features.Auth.Services;
 using SkillHive.Features.Email.Services;
 using SkillHive.Features.Users.Services;
 using SkillHive.Features.Notifications.Services;
+using SkillHive.Features.Categories.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,8 +51,16 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<SkillHive.Features.Academies.Services.AcademyService>();
 builder.Services.AddScoped<SkillHive.Features.Users.Services.StaffService>();
 builder.Services.AddScoped<SkillHive.Features.Users.Services.UserService>();
+builder.Services.AddScoped<SkillHive.Features.Categories.Services.CategoryService>();
 
 var app = builder.Build();
+// Run seeders on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var seeder = new DbSeeder(db, scope.ServiceProvider.GetRequiredService<ILogger<DbSeeder>>());
+    await seeder.SeedAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {

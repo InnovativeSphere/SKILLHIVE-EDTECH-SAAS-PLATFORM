@@ -14,6 +14,10 @@ namespace SkillHive.Data
         public DbSet<VerificationToken> VerificationTokens => Set<VerificationToken>();
         public DbSet<Notification> Notifications => Set<Notification>();
 
+        public DbSet<Category> Categories => Set<Category>();
+        public DbSet<Profession> Professions => Set<Profession>();
+
+        public DbSet<Course> Courses => Set<Course>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -64,6 +68,80 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(n => n.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Table names
+            modelBuilder.Entity<Category>().ToTable("CATEGORIES");
+            modelBuilder.Entity<Profession>().ToTable("PROFESSIONS");
+
+            // Unique slugs per scope
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => new { c.Slug, c.AcademyId })
+                .IsUnique();
+
+            modelBuilder.Entity<Profession>()
+                .HasIndex(p => new { p.Slug, p.AcademyId })
+                .IsUnique();
+
+            // Category -> Academy (nullable)
+            modelBuilder.Entity<Category>()
+                .HasOne(c => c.Academy)
+                .WithMany()
+                .HasForeignKey(c => c.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Profession -> Category
+            modelBuilder.Entity<Profession>()
+                .HasOne(p => p.Category)
+                .WithMany()
+                .HasForeignKey(p => p.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Profession -> Academy (nullable)
+            modelBuilder.Entity<Profession>()
+                .HasOne(p => p.Academy)
+                .WithMany()
+                .HasForeignKey(p => p.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Table name
+            modelBuilder.Entity<Course>().ToTable("COURSES");
+
+            // Unique slug within an academy
+            modelBuilder.Entity<Course>()
+                .HasIndex(c => new { c.Slug, c.AcademyId })
+                .IsUnique();
+
+            // Course -> Academy
+            modelBuilder.Entity<Course>()
+                .HasOne(c => c.Academy)
+                .WithMany()
+                .HasForeignKey(c => c.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Course -> Instructor (User)
+            modelBuilder.Entity<Course>()
+                .HasOne(c => c.Instructor)
+                .WithMany()
+                .HasForeignKey(c => c.InstructorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Course -> CreatedBy (User)
+            modelBuilder.Entity<Course>()
+                .HasOne(c => c.CreatedBy)
+                .WithMany()
+                .HasForeignKey(c => c.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Course -> Profession
+            modelBuilder.Entity<Course>()
+                .HasOne(c => c.Profession)
+                .WithMany()
+                .HasForeignKey(c => c.ProfessionId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
+
+
+
     }
+
 }
