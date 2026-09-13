@@ -10,12 +10,18 @@ using SkillHive.Features.Email.Services;
 using SkillHive.Features.Users.Services;
 using SkillHive.Features.Notifications.Services;
 using SkillHive.Features.Categories.Services;
+using SkillHive.Features.Courses.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Controllers & API documentation
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -52,6 +58,7 @@ builder.Services.AddScoped<SkillHive.Features.Academies.Services.AcademyService>
 builder.Services.AddScoped<SkillHive.Features.Users.Services.StaffService>();
 builder.Services.AddScoped<SkillHive.Features.Users.Services.UserService>();
 builder.Services.AddScoped<SkillHive.Features.Categories.Services.CategoryService>();
+builder.Services.AddScoped<SkillHive.Features.Courses.Services.CourseService>();
 
 var app = builder.Build();
 // Run seeders on startup

@@ -47,7 +47,6 @@ namespace SkillHive.Common
                 File.AppendAllText(_logFile, line + Environment.NewLine);
             }
 
-            // Also echo to console so we see it live
             Console.WriteLine($"[{level}] {message}");
             if (ex != null)
                 Console.WriteLine(ex.Message);
