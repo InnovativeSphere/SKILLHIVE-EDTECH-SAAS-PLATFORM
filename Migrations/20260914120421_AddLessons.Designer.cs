@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SkillHive.Data;
@@ -12,9 +13,11 @@ using SkillHive.Data;
 namespace SkillHive.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914120421_AddLessons")]
+    partial class AddLessons
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -308,8 +311,7 @@ namespace SkillHive.Migrations
                     b.HasKey("LessonId");
 
                     b.HasIndex("CourseId", "Order")
-                        .IsUnique()
-                        .HasFilter("\"IsActive\" = true");
+                        .IsUnique();
 
                     b.ToTable("LESSONS", (string)null);
                 });

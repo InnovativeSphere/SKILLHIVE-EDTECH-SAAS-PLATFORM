@@ -18,6 +18,9 @@ namespace SkillHive.Data
         public DbSet<Profession> Professions => Set<Profession>();
 
         public DbSet<Course> Courses => Set<Course>();
+
+        public DbSet<Lesson> Lessons => Set<Lesson>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -138,6 +141,21 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(c => c.ProfessionId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Lesson>().ToTable("LESSONS");
+
+            // Unique order within a course (no two lessons same position)
+            modelBuilder.Entity<Lesson>()
+      .HasIndex(l => new { l.CourseId, l.Order })
+      .IsUnique()
+      .HasFilter("\"IsActive\" = true");
+
+            // Lesson -> Course
+            modelBuilder.Entity<Lesson>()
+                .HasOne(l => l.Course)
+                .WithMany()
+                .HasForeignKey(l => l.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
 
