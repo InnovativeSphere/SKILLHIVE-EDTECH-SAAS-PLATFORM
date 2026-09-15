@@ -21,6 +21,8 @@ namespace SkillHive.Data
 
         public DbSet<Lesson> Lessons => Set<Lesson>();
 
+        public DbSet<Material> Materials => Set<Material>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -146,9 +148,9 @@ namespace SkillHive.Data
 
             // Unique order within a course (no two lessons same position)
             modelBuilder.Entity<Lesson>()
-      .HasIndex(l => new { l.CourseId, l.Order })
-      .IsUnique()
-      .HasFilter("\"IsActive\" = true");
+            .HasIndex(l => new { l.CourseId, l.Order })
+            .IsUnique()
+            .HasFilter("\"IsActive\" = true");
 
             // Lesson -> Course
             modelBuilder.Entity<Lesson>()
@@ -156,9 +158,15 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(l => l.CourseId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Material>().ToTable("MATERIALS");
+
+            modelBuilder.Entity<Material>()
+                .HasOne(m => m.Lesson)
+                .WithMany()
+                .HasForeignKey(m => m.LessonId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
-
-
 
     }
 

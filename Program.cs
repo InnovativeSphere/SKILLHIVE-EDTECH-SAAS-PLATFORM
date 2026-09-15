@@ -12,6 +12,7 @@ using SkillHive.Features.Notifications.Services;
 using SkillHive.Features.Categories.Services;
 using SkillHive.Features.Courses.Services;
 using SkillHive.Features.Lessons.Services;
+using SkillHive.Features.Materials.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -61,6 +62,8 @@ builder.Services.AddScoped<SkillHive.Features.Users.Services.UserService>();
 builder.Services.AddScoped<SkillHive.Features.Categories.Services.CategoryService>();
 builder.Services.AddScoped<SkillHive.Features.Courses.Services.CourseService>();
 builder.Services.AddScoped<SkillHive.Features.Lessons.Services.LessonService>();
+builder.Services.AddSingleton<SkillHive.Common.CloudinaryService>();
+builder.Services.AddScoped<SkillHive.Features.Materials.Services.MaterialService>();
 
 var app = builder.Build();
 // Run seeders on startup
