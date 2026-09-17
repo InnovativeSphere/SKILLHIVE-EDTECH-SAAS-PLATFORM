@@ -23,6 +23,11 @@ namespace SkillHive.Data
 
         public DbSet<Material> Materials => Set<Material>();
 
+        public DbSet<Quiz> Quizzes => Set<Quiz>();
+        public DbSet<Question> Questions => Set<Question>();
+        public DbSet<Option> Options => Set<Option>();
+        public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -38,6 +43,7 @@ namespace SkillHive.Data
             modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
             modelBuilder.Entity<Academy>().HasIndex(a => a.Slug).IsUnique();
             modelBuilder.Entity<VerificationToken>().HasIndex(v => v.Token).IsUnique();
+
 
             // Academy -> Owner (User) — no cascade delete
             modelBuilder.Entity<Academy>()
@@ -166,6 +172,54 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(m => m.LessonId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Table names
+            modelBuilder.Entity<Quiz>().ToTable("QUIZZES");
+            modelBuilder.Entity<Question>().ToTable("QUESTIONS");
+            modelBuilder.Entity<Option>().ToTable("OPTIONS");
+            modelBuilder.Entity<QuizAttempt>().ToTable("QUIZ_ATTEMPTS");
+
+            // Quiz -> Course (nullable)
+            modelBuilder.Entity<Quiz>()
+                .HasOne(q => q.Course)
+                .WithMany()
+                .HasForeignKey(q => q.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Quiz -> Lesson (nullable)
+            modelBuilder.Entity<Quiz>()
+                .HasOne(q => q.Lesson)
+                .WithMany()
+                .HasForeignKey(q => q.LessonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Question -> Quiz
+            modelBuilder.Entity<Question>()
+                .HasOne(q => q.Quiz)
+                .WithMany(qz => qz.Questions)
+                .HasForeignKey(q => q.QuizId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Option -> Question
+            modelBuilder.Entity<Option>()
+                .HasOne(o => o.Question)
+                .WithMany(q => q.Options)
+                .HasForeignKey(o => o.QuestionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // QuizAttempt -> Quiz
+            modelBuilder.Entity<QuizAttempt>()
+                .HasOne(a => a.Quiz)
+                .WithMany(q => q.Attempts)
+                .HasForeignKey(a => a.QuizId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // QuizAttempt -> Student (User)
+            modelBuilder.Entity<QuizAttempt>()
+                .HasOne(a => a.Student)
+                .WithMany()
+                .HasForeignKey(a => a.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
 
     }
