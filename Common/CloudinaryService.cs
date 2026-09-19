@@ -27,14 +27,15 @@ namespace SkillHive.Common
             _cloudinary = new Cloudinary(account) { Api = { Secure = true } };
         }
 
-        public async Task<CloudinaryUploadResult> UploadAsync(Stream stream, string fileName, string folder)
+              public async Task<CloudinaryUploadResult> UploadAsync(Stream stream, string fileName, string folder)
         {
             var fileType = FileHelper.GetFileTypeCategory(fileName);
             var fileDescription = new FileDescription(fileName, stream);
 
             UploadResult result;
 
-            if (fileType == FileType.IMAGE)
+            // Images AND PDFs go through ImageUploadParams so they render/transform in Cloudinary
+            if (fileType == FileType.IMAGE || fileType == FileType.PDF)
             {
                 result = await _cloudinary.UploadAsync(new ImageUploadParams
                 {
@@ -76,7 +77,6 @@ namespace SkillHive.Common
                 Format = result.Format,
             };
         }
-
         public async Task<bool> DeleteAsync(string publicId)
         {
             var result = await _cloudinary.DestroyAsync(new DeletionParams(publicId));

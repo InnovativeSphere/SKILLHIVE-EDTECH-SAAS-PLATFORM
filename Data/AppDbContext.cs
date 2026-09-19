@@ -31,6 +31,7 @@ namespace SkillHive.Data
         public DbSet<Enrollment> Enrollments => Set<Enrollment>();
         public DbSet<LessonProgress> LessonProgresses => Set<LessonProgress>();
         public DbSet<StudentAcademyFollow> StudentAcademyFollows => Set<StudentAcademyFollow>();
+        public DbSet<Certificate> Certificates => Set<Certificate>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -285,8 +286,54 @@ namespace SkillHive.Data
             // Enrollment: no duplicate active enrollment for same (student, course) — enforced at service level
             modelBuilder.Entity<Enrollment>()
                 .HasIndex(e => new { e.StudentId, e.CourseId });
-        }
 
+            modelBuilder.Entity<Certificate>().ToTable("CERTIFICATES");
+
+            // Index for lookups (NOT unique — allows reissue to create new cert while keeping history)
+            modelBuilder.Entity<Certificate>()
+                .HasIndex(c => c.EnrollmentId);
+
+            // Verification code must be globally unique
+            modelBuilder.Entity<Certificate>()
+                .HasIndex(c => c.VerificationCode)
+                .IsUnique();
+
+            // Certificate -> Enrollment
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.Enrollment)
+                .WithMany()
+                .HasForeignKey(c => c.EnrollmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Certificate -> Student (User)
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.Student)
+                .WithMany()
+                .HasForeignKey(c => c.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Certificate -> Course
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.Course)
+                .WithMany()
+                .HasForeignKey(c => c.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Certificate -> Academy
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.Academy)
+                .WithMany()
+                .HasForeignKey(c => c.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Certificate -> IssuedBy (User, nullable)
+            modelBuilder.Entity<Certificate>()
+                .HasOne(c => c.IssuedBy)
+                .WithMany()
+                .HasForeignKey(c => c.IssuedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+        }
     }
 
 }

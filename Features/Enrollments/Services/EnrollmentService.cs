@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Certificates.Services;
 using SkillHive.Features.Enrollments.DTOs;
 using SkillHive.Models;
 
@@ -9,10 +10,12 @@ namespace SkillHive.Features.Enrollments.Services
     public class EnrollmentService
     {
         private readonly AppDbContext _db;
+        private readonly CertificateService _certificateService;
 
-        public EnrollmentService(AppDbContext db)
+        public EnrollmentService(AppDbContext db, CertificateService certificateService)
         {
             _db = db;
+            _certificateService = certificateService;
         }
 
         // ─── Enroll in a Course (Student) ───────────────────────────
@@ -151,7 +154,7 @@ namespace SkillHive.Features.Enrollments.Services
 
             await _db.SaveChangesAsync();
 
-            // Recalculate progress + completion
+            // Recalculate progress + completion (may trigger certificate)
             var update = await RecalculateProgressAsync(enrollment.EnrollmentId);
 
             return new
@@ -387,6 +390,7 @@ namespace SkillHive.Features.Enrollments.Services
         /// <summary>
         /// Recalculates an enrollment's progress percentage and completion status.
         /// Completion = all active lessons done AND all required quizzes passed.
+        /// On completion, triggers certificate generation.
         /// </summary>
         private async Task<(int ProgressPercentage, string Status, DateTime? CompletedAt)> RecalculateProgressAsync(int enrollmentId)
         {
@@ -411,11 +415,10 @@ namespace SkillHive.Features.Enrollments.Services
             var completedLessons = await _db.LessonProgresses
                 .CountAsync(lp => lp.EnrollmentId == enrollmentId && lp.IsCompleted);
 
-            // Cap at 100 just in case a lesson was added after completion
             var percentage = Math.Min(100, (int)Math.Round((double)completedLessons / totalLessons * 100));
             enrollment.ProgressPercentage = percentage;
 
-            // Check quiz requirements — are there any quizzes attached to this course or its lessons?
+            // Check quiz requirements — quizzes on the course or any of its lessons
             var lessonIds = await _db.Lessons
                 .Where(l => l.CourseId == enrollment.CourseId && l.IsActive)
                 .Select(l => l.LessonId)
@@ -450,10 +453,24 @@ namespace SkillHive.Features.Enrollments.Services
             {
                 enrollment.Status = EnrollmentStatus.COMPLETED;
                 enrollment.CompletedAt = DateTime.UtcNow;
+
+                // Save completion FIRST so certificate service can read the updated status
+                await _db.SaveChangesAsync();
+
+                // Then generate certificate (best-effort; failure doesn't block enrollment)
+                try
+                {
+                    await _certificateService.GenerateForEnrollmentAsync(enrollment.EnrollmentId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Certificate generation failed for enrollment {enrollment.EnrollmentId}: {ex.Message}");
+                }
+
+                return (enrollment.ProgressPercentage, enrollment.Status.ToString(), enrollment.CompletedAt);
             }
 
             await _db.SaveChangesAsync();
-
             return (enrollment.ProgressPercentage, enrollment.Status.ToString(), enrollment.CompletedAt);
         }
     }

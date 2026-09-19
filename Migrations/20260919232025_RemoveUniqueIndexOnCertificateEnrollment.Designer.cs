@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SkillHive.Data;
@@ -12,9 +13,11 @@ using SkillHive.Data;
 namespace SkillHive.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919232025_RemoveUniqueIndexOnCertificateEnrollment")]
+    partial class RemoveUniqueIndexOnCertificateEnrollment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -190,14 +193,12 @@ namespace SkillHive.Migrations
 
                     b.HasIndex("CourseId");
 
-                    b.HasIndex("EnrollmentId");
+                    b.HasIndex("EnrollmentId")
+                        .IsUnique();
 
                     b.HasIndex("IssuedByUserId");
 
                     b.HasIndex("StudentId");
-
-                    b.HasIndex("VerificationCode")
-                        .IsUnique();
 
                     b.ToTable("CERTIFICATES", (string)null);
                 });
