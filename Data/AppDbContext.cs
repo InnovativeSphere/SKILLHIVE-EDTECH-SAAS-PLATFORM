@@ -28,6 +28,10 @@ namespace SkillHive.Data
         public DbSet<Option> Options => Set<Option>();
         public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
 
+        public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+        public DbSet<LessonProgress> LessonProgresses => Set<LessonProgress>();
+        public DbSet<StudentAcademyFollow> StudentAcademyFollows => Set<StudentAcademyFollow>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -220,6 +224,67 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(a => a.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Table names
+            modelBuilder.Entity<Enrollment>().ToTable("ENROLLMENTS");
+            modelBuilder.Entity<LessonProgress>().ToTable("LESSON_PROGRESS");
+            modelBuilder.Entity<StudentAcademyFollow>().ToTable("STUDENT_ACADEMY_FOLLOWS");
+
+            // Enrollment -> Student (User)
+            modelBuilder.Entity<Enrollment>()
+                .HasOne(e => e.Student)
+                .WithMany()
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Enrollment -> Course
+            modelBuilder.Entity<Enrollment>()
+                .HasOne(e => e.Course)
+                .WithMany()
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // LessonProgress -> Enrollment (cascade — deleting enrollment cleans up progress)
+            modelBuilder.Entity<LessonProgress>()
+                .HasOne(lp => lp.Enrollment)
+                .WithMany(e => e.LessonProgresses)
+                .HasForeignKey(lp => lp.EnrollmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // LessonProgress -> Lesson
+            modelBuilder.Entity<LessonProgress>()
+                .HasOne(lp => lp.Lesson)
+                .WithMany()
+                .HasForeignKey(lp => lp.LessonId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Unique: one progress row per (enrollment, lesson)
+            modelBuilder.Entity<LessonProgress>()
+                .HasIndex(lp => new { lp.EnrollmentId, lp.LessonId })
+                .IsUnique();
+
+            // StudentAcademyFollow -> Student
+            modelBuilder.Entity<StudentAcademyFollow>()
+                .HasOne(f => f.Student)
+                .WithMany()
+                .HasForeignKey(f => f.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // StudentAcademyFollow -> Academy
+            modelBuilder.Entity<StudentAcademyFollow>()
+                .HasOne(f => f.Academy)
+                .WithMany()
+                .HasForeignKey(f => f.AcademyId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Unique: one follow per (student, academy)
+            modelBuilder.Entity<StudentAcademyFollow>()
+                .HasIndex(f => new { f.StudentId, f.AcademyId })
+                .IsUnique();
+
+            // Enrollment: no duplicate active enrollment for same (student, course) — enforced at service level
+            modelBuilder.Entity<Enrollment>()
+                .HasIndex(e => new { e.StudentId, e.CourseId });
         }
 
     }

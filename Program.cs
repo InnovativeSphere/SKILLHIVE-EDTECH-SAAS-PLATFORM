@@ -14,6 +14,7 @@ using SkillHive.Features.Courses.Services;
 using SkillHive.Features.Lessons.Services;
 using SkillHive.Features.Materials.Services;
 using SkillHive.Features.Quizzes.Services;
+using SkillHive.Features.Enrollments.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -66,6 +67,7 @@ builder.Services.AddScoped<SkillHive.Features.Lessons.Services.LessonService>();
 builder.Services.AddSingleton<SkillHive.Common.CloudinaryService>();
 builder.Services.AddScoped<SkillHive.Features.Materials.Services.MaterialService>();
 builder.Services.AddScoped<SkillHive.Features.Quizzes.Services.QuizService>();
+builder.Services.AddScoped<SkillHive.Features.Enrollments.Services.EnrollmentService>();
 
 var app = builder.Build();
 // Run seeders on startup

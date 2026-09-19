@@ -2,9 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace SkillHive.Features.Enrollments.DTOs
 {
-    public class EnrollDto
+    public class UnfollowAcademyDto
     {
         [Required]
-        public int CourseId { get; set; }
+        public int AcademyId { get; set; }
     }
 }
