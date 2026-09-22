@@ -32,7 +32,7 @@ namespace SkillHive.Data
         public DbSet<LessonProgress> LessonProgresses => Set<LessonProgress>();
         public DbSet<StudentAcademyFollow> StudentAcademyFollows => Set<StudentAcademyFollow>();
         public DbSet<Certificate> Certificates => Set<Certificate>();
-
+        public DbSet<Review> Reviews => Set<Review>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -332,7 +332,38 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(c => c.IssuedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            // Table name
+            modelBuilder.Entity<Review>().ToTable("REVIEWS");
 
+            // One review per enrollment
+            modelBuilder.Entity<Review>()
+                .HasIndex(r => r.EnrollmentId)
+                .IsUnique();
+
+            // Fast lookup by course + status
+            modelBuilder.Entity<Review>()
+                .HasIndex(r => new { r.CourseId, r.Status });
+
+            // Review -> Course
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Course)
+                .WithMany()
+                .HasForeignKey(r => r.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Review -> Student (User)
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Student)
+                .WithMany()
+                .HasForeignKey(r => r.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Review -> Enrollment
+            modelBuilder.Entity<Review>()
+                .HasOne(r => r.Enrollment)
+                .WithMany()
+                .HasForeignKey(r => r.EnrollmentId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 
