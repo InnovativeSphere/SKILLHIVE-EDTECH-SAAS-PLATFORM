@@ -19,6 +19,7 @@ using QuestPDF.Infrastructure;
 using SkillHive.Features.Certificates.Services;
 using SkillHive.Features.Reviews.Services;
 using SkillHive.Features.Comments.Services;
+using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +79,7 @@ builder.Services.AddSingleton<SkillHive.Common.PdfService>();
 builder.Services.AddScoped<SkillHive.Features.Certificates.Services.CertificateService>();
 builder.Services.AddScoped<SkillHive.Features.Reviews.Services.ReviewService>();
 builder.Services.AddScoped<SkillHive.Features.Comments.Services.CommentService>();
+builder.Services.AddScoped<SkillHive.Features.Subscriptions.Services.SubscriptionService>();
 
 var app = builder.Build();
 // Run seeders on startup
