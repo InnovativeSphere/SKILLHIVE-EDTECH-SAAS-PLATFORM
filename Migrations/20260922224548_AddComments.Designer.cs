@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SkillHive.Data;
@@ -12,9 +13,11 @@ using SkillHive.Data;
 namespace SkillHive.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922224548_AddComments")]
+    partial class AddComments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -626,77 +629,6 @@ namespace SkillHive.Migrations
                     b.ToTable("OPTIONS", (string)null);
                 });
 
-            modelBuilder.Entity("SkillHive.Models.Plan", b =>
-                {
-                    b.Property<int>("PlanId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PlanId"));
-
-                    b.Property<bool>("CanChargeCourses")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("CanUseCertificates")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("CanUseCustomBranding")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<int>("Interval")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPublic")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("MaxCourses")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MaxStaff")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("MaxStudentsPerCourse")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("PlanId");
-
-                    b.HasIndex("Slug")
-                        .IsUnique();
-
-                    b.ToTable("PLANS", (string)null);
-                });
-
             modelBuilder.Entity("SkillHive.Models.Profession", b =>
                 {
                     b.Property<int>("ProfessionId")
@@ -950,54 +882,6 @@ namespace SkillHive.Migrations
                         .IsUnique();
 
                     b.ToTable("STUDENT_ACADEMY_FOLLOWS", (string)null);
-                });
-
-            modelBuilder.Entity("SkillHive.Models.Subscription", b =>
-                {
-                    b.Property<int>("SubscriptionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SubscriptionId"));
-
-                    b.Property<int>("AcademyId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("AutoRenew")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("EndDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("GraceUntil")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PlanId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("SubscriptionId");
-
-                    b.HasIndex("AcademyId")
-                        .IsUnique();
-
-                    b.HasIndex("PlanId");
-
-                    b.ToTable("SUBSCRIPTIONS", (string)null);
                 });
 
             modelBuilder.Entity("SkillHive.Models.User", b =>
@@ -1425,25 +1309,6 @@ namespace SkillHive.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("SkillHive.Models.Subscription", b =>
-                {
-                    b.HasOne("SkillHive.Models.Academy", "Academy")
-                        .WithMany()
-                        .HasForeignKey("AcademyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SkillHive.Models.Plan", "Plan")
-                        .WithMany("Subscriptions")
-                        .HasForeignKey("PlanId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Academy");
-
-                    b.Navigation("Plan");
-                });
-
             modelBuilder.Entity("SkillHive.Models.User", b =>
                 {
                     b.HasOne("SkillHive.Models.Academy", "Academy")
@@ -1475,11 +1340,6 @@ namespace SkillHive.Migrations
             modelBuilder.Entity("SkillHive.Models.Enrollment", b =>
                 {
                     b.Navigation("LessonProgresses");
-                });
-
-            modelBuilder.Entity("SkillHive.Models.Plan", b =>
-                {
-                    b.Navigation("Subscriptions");
                 });
 
             modelBuilder.Entity("SkillHive.Models.Question", b =>

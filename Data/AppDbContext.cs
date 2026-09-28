@@ -33,6 +33,12 @@ namespace SkillHive.Data
         public DbSet<StudentAcademyFollow> StudentAcademyFollows => Set<StudentAcademyFollow>();
         public DbSet<Certificate> Certificates => Set<Certificate>();
         public DbSet<Review> Reviews => Set<Review>();
+        public DbSet<Comment> Comments => Set<Comment>();
+
+        // ─── NEW ───
+        public DbSet<Plan> Plans => Set<Plan>();
+        public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -364,6 +370,71 @@ namespace SkillHive.Data
                 .WithMany()
                 .HasForeignKey(r => r.EnrollmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Comment>().ToTable("COMMENTS");
+
+            // Fast lookup: all comments for a target
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => new { c.TargetType, c.TargetId });
+
+            // Fast lookup: all comments scoped by course
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => c.CourseId);
+
+            // Fast lookup: replies to a parent
+            modelBuilder.Entity<Comment>()
+                .HasIndex(c => c.ParentCommentId);
+
+            // Comment -> Course
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.Course)
+                .WithMany()
+                .HasForeignKey(c => c.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Comment -> Author (User)
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.Author)
+                .WithMany()
+                .HasForeignKey(c => c.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Comment -> ParentComment (self-referential, no cascade — replies survive parent hide)
+            modelBuilder.Entity<Comment>()
+                .HasOne(c => c.ParentComment)
+                .WithMany()
+                .HasForeignKey(c => c.ParentCommentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ─── NEW ─── Plan & Subscription configuration
+
+            modelBuilder.Entity<Plan>().ToTable("PLANS");
+            modelBuilder.Entity<Subscription>().ToTable("SUBSCRIPTIONS");
+
+            // Plan slug must be globally unique (used for pricing URL: /pricing/pro)
+            modelBuilder.Entity<Plan>()
+                .HasIndex(p => p.Slug)
+                .IsUnique();
+
+            // One active subscription per academy
+            // Enforced here because the notebook says academyId is unique
+            modelBuilder.Entity<Subscription>()
+                .HasIndex(s => s.AcademyId)
+                .IsUnique();
+
+            // Subscription -> Academy
+            modelBuilder.Entity<Subscription>()
+                .HasOne(s => s.Academy)
+                .WithMany()
+                .HasForeignKey(s => s.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Subscription -> Plan
+            modelBuilder.Entity<Subscription>()
+                .HasOne(s => s.Plan)
+                .WithMany(p => p.Subscriptions)
+                .HasForeignKey(s => s.PlanId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 

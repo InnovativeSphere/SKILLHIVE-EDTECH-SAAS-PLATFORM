@@ -22,6 +22,12 @@ namespace SkillHive.Data
 
                 await SeedCategories.SeedGlobalTaxonomyAsync(_db);
                 _logger.LogInformation("Seeded global taxonomy.");
+
+                // ─── NEW ───
+                await SeedPlans.SeedAsync(_db);
+                _logger.LogInformation("Seeded subscription plans.");
+
+                // TODO: SeedDemoAcademy once Subscriptions module is complete
             }
             catch (Exception ex)
             {

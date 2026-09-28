@@ -4,3 +4,5 @@ appsettings.Development.json
 logs/
 .vs/
 *.user
+dump-csharp-project.js
+project-dump.json
