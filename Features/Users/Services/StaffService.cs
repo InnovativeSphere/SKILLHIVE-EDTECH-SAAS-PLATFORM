@@ -3,6 +3,7 @@ using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
 using SkillHive.Features.Notifications.Services;
+using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Features.Users.DTOs;
 using SkillHive.Models;
 
@@ -13,12 +14,18 @@ namespace SkillHive.Features.Users.Services
         private readonly AppDbContext _db;
         private readonly NotificationService _notifications;
         private readonly IConfiguration _config;
+        private readonly SubscriptionService _subscriptions;
 
-        public StaffService(AppDbContext db, NotificationService notifications, IConfiguration config)
+        public StaffService(
+            AppDbContext db,
+            NotificationService notifications,
+            IConfiguration config,
+            SubscriptionService subscriptions)
         {
             _db = db;
             _notifications = notifications;
             _config = config;
+            _subscriptions = subscriptions;
         }
 
         // ─── Invite a Staff Member (Owner only) ────────────────────
@@ -30,6 +37,11 @@ namespace SkillHive.Features.Users.Services
 
             if (owner.AcademyId == null)
                 throw new InvalidOperationException("You do not have an academy");
+
+            // Plan limit enforcement — checks subscription status + max staff
+            var (allowed, reason) = await _subscriptions.CanAddStaffAsync(owner.AcademyId.Value);
+            if (!allowed)
+                throw new InvalidOperationException(reason ?? "Your subscription does not permit inviting more staff");
 
             if (!Enum.TryParse<UserRole>(dto.Role.ToUpperInvariant(), out var role))
                 throw new InvalidOperationException("Invalid role");

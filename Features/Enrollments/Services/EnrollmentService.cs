@@ -3,6 +3,7 @@ using SkillHive.Data;
 using SkillHive.Enums;
 using SkillHive.Features.Certificates.Services;
 using SkillHive.Features.Enrollments.DTOs;
+using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Models;
 
 namespace SkillHive.Features.Enrollments.Services
@@ -11,11 +12,16 @@ namespace SkillHive.Features.Enrollments.Services
     {
         private readonly AppDbContext _db;
         private readonly CertificateService _certificateService;
+        private readonly SubscriptionService _subscriptions;
 
-        public EnrollmentService(AppDbContext db, CertificateService certificateService)
+        public EnrollmentService(
+            AppDbContext db,
+            CertificateService certificateService,
+            SubscriptionService subscriptions)
         {
             _db = db;
             _certificateService = certificateService;
+            _subscriptions = subscriptions;
         }
 
         // ─── Enroll in a Course (Student) ───────────────────────────
@@ -42,6 +48,11 @@ namespace SkillHive.Features.Enrollments.Services
 
             if (!course.IsFree)
                 throw new InvalidOperationException("This is a paid course. Payment flow is not yet available.");
+
+            // Plan limit enforcement — checks subscription status + max students per course
+            var (allowed, reason) = await _subscriptions.CanEnrollStudentAsync(course.AcademyId, course.CourseId);
+            if (!allowed)
+                throw new InvalidOperationException(reason ?? "This course has reached its enrollment capacity");
 
             // Check for existing enrollment
             var existing = await _db.Enrollments

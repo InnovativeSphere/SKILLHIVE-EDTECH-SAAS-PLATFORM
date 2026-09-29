@@ -4,6 +4,7 @@ using SkillHive.Data;
 using SkillHive.Enums;
 using SkillHive.Features.Auth.DTOs;
 using SkillHive.Features.Notifications.Services;
+using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Models;
 
 namespace SkillHive.Features.Auth.Services
@@ -14,17 +15,20 @@ namespace SkillHive.Features.Auth.Services
         private readonly JwtHelper _jwt;
         private readonly NotificationService _notifications;
         private readonly IConfiguration _config;
+        private readonly SubscriptionService _subscriptions;
 
         public AuthService(
             AppDbContext db,
             JwtHelper jwt,
             NotificationService notifications,
-            IConfiguration config)
+            IConfiguration config,
+            SubscriptionService subscriptions)
         {
             _db = db;
             _jwt = jwt;
             _notifications = notifications;
             _config = config;
+            _subscriptions = subscriptions;
         }
 
         // ─── Register Academy Owner ────────────────────────────────
@@ -79,7 +83,9 @@ namespace SkillHive.Features.Auth.Services
                 owner.AcademyId = academy.AcademyId;
                 await _db.SaveChangesAsync();
 
-                // TODO: Create trial subscription here once Subscriptions module is built.
+                // Create trial subscription (7 days on Starter by default).
+                // Runs inside the same transaction — if it fails, the whole registration rolls back.
+                await _subscriptions.CreateTrialForAcademyAsync(academy.AcademyId);
 
                 var otp = TokenHelper.GenerateOtp();
                 var verificationToken = new VerificationToken
@@ -494,7 +500,7 @@ namespace SkillHive.Features.Auth.Services
             return new { message = "Password reset successful. You can now log in." };
         }
 
-                // ─── Accept Invite (Staff) ─────────────────────────────────
+        // ─── Accept Invite (Staff) ─────────────────────────────────
         public async Task<object> AcceptInviteAsync(AcceptInviteDto dto)
         {
             var token = await _db.VerificationTokens
@@ -563,6 +569,4 @@ namespace SkillHive.Features.Auth.Services
                 throw new InvalidOperationException("Username is already taken");
         }
     }
-
-
 }

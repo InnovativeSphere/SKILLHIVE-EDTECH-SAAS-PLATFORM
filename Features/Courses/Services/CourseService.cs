@@ -3,6 +3,7 @@ using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
 using SkillHive.Features.Courses.DTOs;
+using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Models;
 
 namespace SkillHive.Features.Courses.Services
@@ -10,10 +11,12 @@ namespace SkillHive.Features.Courses.Services
     public class CourseService
     {
         private readonly AppDbContext _db;
+        private readonly SubscriptionService _subscriptions;
 
-        public CourseService(AppDbContext db)
+        public CourseService(AppDbContext db, SubscriptionService subscriptions)
         {
             _db = db;
+            _subscriptions = subscriptions;
         }
 
         // ─── Public Browse ─────────────────────────────────────────
@@ -132,12 +135,10 @@ namespace SkillHive.Features.Courses.Services
             if (course == null)
                 throw new InvalidOperationException("Course not found");
 
-            // Access check
             var isOwnerOfCourseAcademy = isAcademyStaff && requesterAcademyId == course.AcademyId;
 
             if (!isOwnerOfCourseAcademy)
             {
-                // Public visibility rules
                 if (course.Status != CourseStatus.PUBLISHED)
                     throw new InvalidOperationException("Course not found");
 
@@ -251,6 +252,11 @@ namespace SkillHive.Features.Courses.Services
 
             if (academyId == null)
                 throw new InvalidOperationException("You do not belong to an academy");
+
+            // Plan limit enforcement — checks subscription status + max courses
+            var (allowed, reason) = await _subscriptions.CanAddCourseAsync(academyId.Value);
+            if (!allowed)
+                throw new InvalidOperationException(reason ?? "Your subscription does not permit creating new courses");
 
             var profession = await _db.Professions
                 .FirstOrDefaultAsync(p => p.ProfessionId == dto.ProfessionId && p.IsActive);
