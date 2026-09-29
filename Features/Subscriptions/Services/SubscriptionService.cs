@@ -701,5 +701,34 @@ namespace SkillHive.Features.Subscriptions.Services
                 updatedAt = s.UpdatedAt
             };
         }
+                /// <summary>
+        /// Called by Payments/Invoices on successful payment for a renewal.
+        /// Extends the subscription from the current EndDate (or now, whichever is later).
+        /// Use this for renewals; use ActivateSubscriptionAsync for trial → active or
+        /// reactivation from expiry.
+        /// </summary>
+        public async Task<object> ExtendSubscriptionAsync(int subscriptionId)
+        {
+            var subscription = await _db.Subscriptions
+                .Include(s => s.Plan)
+                .FirstOrDefaultAsync(s => s.SubscriptionId == subscriptionId);
+
+            if (subscription == null)
+                throw new InvalidOperationException("Subscription not found");
+
+            var now = DateTime.UtcNow;
+            // Extend from current EndDate if still in the future; otherwise from now
+            var baseDate = subscription.EndDate > now ? subscription.EndDate : now;
+
+            subscription.Status = SubscriptionStatus.ACTIVE;
+            subscription.EndDate = DateHelper.CalculateSubscriptionEndDate(baseDate, subscription.Plan.Interval);
+            subscription.GraceUntil = null;
+            subscription.CancelledAt = null;
+            subscription.UpdatedAt = now;
+
+            await _db.SaveChangesAsync();
+
+            return SubscriptionToResponse(subscription, subscription.Plan);
+        }
     }
 }

@@ -35,9 +35,11 @@ namespace SkillHive.Data
         public DbSet<Review> Reviews => Set<Review>();
         public DbSet<Comment> Comments => Set<Comment>();
 
-        // ─── NEW ───
         public DbSet<Plan> Plans => Set<Plan>();
         public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
+        // ─── NEW ───
+        public DbSet<Invoice> Invoices => Set<Invoice>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -406,7 +408,7 @@ namespace SkillHive.Data
                 .HasForeignKey(c => c.ParentCommentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // ─── NEW ─── Plan & Subscription configuration
+            // ─── Plan & Subscription configuration
 
             modelBuilder.Entity<Plan>().ToTable("PLANS");
             modelBuilder.Entity<Subscription>().ToTable("SUBSCRIPTIONS");
@@ -434,6 +436,48 @@ namespace SkillHive.Data
                 .HasOne(s => s.Plan)
                 .WithMany(p => p.Subscriptions)
                 .HasForeignKey(s => s.PlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ─── NEW ─── Invoice configuration
+
+            modelBuilder.Entity<Invoice>().ToTable("INVOICES");
+
+            // Invoice number must be globally unique — the retry loop depends on this
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.InvoiceNumber)
+                .IsUnique();
+
+            // Fast scoping: "all invoices for academy X"
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.AcademyId);
+
+            // Fast filtering: "all unpaid invoices", "all overdue invoices"
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.Status);
+
+            // Fast lookup: "all invoices for subscription X"
+            modelBuilder.Entity<Invoice>()
+                .HasIndex(i => i.SubscriptionId);
+
+            // Invoice -> Subscription
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Subscription)
+                .WithMany(s => s.Invoices)
+                .HasForeignKey(i => i.SubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Invoice -> Academy
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Academy)
+                .WithMany()
+                .HasForeignKey(i => i.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Invoice -> Plan
+            modelBuilder.Entity<Invoice>()
+                .HasOne(i => i.Plan)
+                .WithMany()
+                .HasForeignKey(i => i.PlanId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

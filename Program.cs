@@ -20,6 +20,7 @@ using SkillHive.Features.Certificates.Services;
 using SkillHive.Features.Reviews.Services;
 using SkillHive.Features.Comments.Services;
 using SkillHive.Features.Subscriptions.Services;
+using SkillHive.Features.Invoices.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -80,6 +81,7 @@ builder.Services.AddScoped<SkillHive.Features.Certificates.Services.CertificateS
 builder.Services.AddScoped<SkillHive.Features.Reviews.Services.ReviewService>();
 builder.Services.AddScoped<SkillHive.Features.Comments.Services.CommentService>();
 builder.Services.AddScoped<SkillHive.Features.Subscriptions.Services.SubscriptionService>();
+builder.Services.AddScoped<SkillHive.Features.Invoices.Services.InvoiceService>();
 
 var app = builder.Build();
 // Run seeders on startup

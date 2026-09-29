@@ -41,5 +41,6 @@ namespace SkillHive.Models
 
         [ForeignKey(nameof(PlanId))]
         public Plan Plan { get; set; } = null!;
+        public List<Invoice> Invoices { get; set; } = new();
     }
 }
