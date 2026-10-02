@@ -22,6 +22,7 @@ using SkillHive.Features.Comments.Services;
 using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Features.Invoices.Services;
 using SkillHive.Features.Payments.Services;
+using SkillHive.Features.Analytics.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -84,6 +85,9 @@ builder.Services.AddScoped<SkillHive.Features.Comments.Services.CommentService>(
 builder.Services.AddScoped<SkillHive.Features.Subscriptions.Services.SubscriptionService>();
 builder.Services.AddScoped<SkillHive.Features.Invoices.Services.InvoiceService>();
 builder.Services.AddScoped<SkillHive.Features.Payments.Services.PaymentService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<AnalyticsCache>();
+builder.Services.AddScoped<SkillHive.Features.Analytics.Services.AnalyticsService>();
 
 var app = builder.Build();
 // Run seeders on startup

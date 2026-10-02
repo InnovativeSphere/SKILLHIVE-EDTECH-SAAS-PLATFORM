@@ -209,6 +209,7 @@ namespace SkillHive.Features.Payments.Services
                 Purpose = PaymentPurpose.COURSE_PURCHASE,
                 StudentId = userId,
                 CourseId = course.CourseId,
+                AcademyId = course.AcademyId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
