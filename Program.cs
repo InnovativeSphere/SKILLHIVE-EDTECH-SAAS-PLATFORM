@@ -21,6 +21,7 @@ using SkillHive.Features.Reviews.Services;
 using SkillHive.Features.Comments.Services;
 using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Features.Invoices.Services;
+using SkillHive.Features.Payments.Services;
 using SkillHive.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -82,6 +83,7 @@ builder.Services.AddScoped<SkillHive.Features.Reviews.Services.ReviewService>();
 builder.Services.AddScoped<SkillHive.Features.Comments.Services.CommentService>();
 builder.Services.AddScoped<SkillHive.Features.Subscriptions.Services.SubscriptionService>();
 builder.Services.AddScoped<SkillHive.Features.Invoices.Services.InvoiceService>();
+builder.Services.AddScoped<SkillHive.Features.Payments.Services.PaymentService>();
 
 var app = builder.Build();
 // Run seeders on startup
@@ -99,6 +101,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseMiddleware<RawBodyMiddleware>();
 
 // Cookie-to-header bridge: if Authorization header is missing but AuthToken cookie exists,
 // copy it to the header so JWT validation works for both Bearer and cookie clients.

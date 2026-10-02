@@ -484,5 +484,92 @@ namespace SkillHive.Features.Enrollments.Services
             await _db.SaveChangesAsync();
             return (enrollment.ProgressPercentage, enrollment.Status.ToString(), enrollment.CompletedAt);
         }
+                /// <summary>
+        /// Called by Payments when a Paystack webhook confirms a course purchase.
+        /// Skips the free-enrollment validation and the plan-limit check —
+        /// those are done before payment is initialized.
+        /// Idempotent: if student is already actively enrolled, returns the existing row.
+        /// </summary>
+        public async Task<object> CreatePaidEnrollmentAsync(int studentId, int courseId, int paymentId)
+        {
+            var course = await _db.Courses
+                .Include(c => c.Academy)
+                .FirstOrDefaultAsync(c => c.CourseId == courseId);
+
+            if (course == null)
+                throw new InvalidOperationException("Course not found");
+
+            var existing = await _db.Enrollments
+                .FirstOrDefaultAsync(e => e.StudentId == studentId && e.CourseId == courseId);
+
+            Enrollment enrollment;
+
+            if (existing != null)
+            {
+                if (existing.Status == EnrollmentStatus.ACTIVE
+                    || existing.Status == EnrollmentStatus.COMPLETED)
+                {
+                    // Already enrolled — idempotency should have caught this earlier,
+                    // but return gracefully if it didn't.
+                    return new
+                    {
+                        enrollmentId = existing.EnrollmentId,
+                        studentId = existing.StudentId,
+                        courseId = existing.CourseId,
+                        status = existing.Status.ToString(),
+                        message = "Already enrolled"
+                    };
+                }
+
+                // Reactivate dropped enrollment — preserve progress, attach the payment
+                existing.Status = EnrollmentStatus.ACTIVE;
+                existing.PaymentId = paymentId;
+                existing.EnrolledAt = DateTime.UtcNow;
+                existing.LastAccessedAt = DateTime.UtcNow;
+                enrollment = existing;
+            }
+            else
+            {
+                enrollment = new Enrollment
+                {
+                    StudentId = studentId,
+                    CourseId = courseId,
+                    PaymentId = paymentId,
+                    Status = EnrollmentStatus.ACTIVE,
+                    EnrolledAt = DateTime.UtcNow,
+                    LastAccessedAt = DateTime.UtcNow,
+                    ProgressPercentage = 0
+                };
+                _db.Enrollments.Add(enrollment);
+                course.TotalEnrollments += 1;
+            }
+
+            // Auto-follow the academy (soft-follow pattern)
+            var alreadyFollowing = await _db.StudentAcademyFollows
+                .AnyAsync(f => f.StudentId == studentId && f.AcademyId == course.AcademyId);
+
+            if (!alreadyFollowing)
+            {
+                _db.StudentAcademyFollows.Add(new StudentAcademyFollow
+                {
+                    StudentId = studentId,
+                    AcademyId = course.AcademyId,
+                    NotifyOnNewCourse = true,
+                    FollowedAt = DateTime.UtcNow
+                });
+            }
+
+            await _db.SaveChangesAsync();
+
+            return new
+            {
+                enrollmentId = enrollment.EnrollmentId,
+                studentId = enrollment.StudentId,
+                courseId = enrollment.CourseId,
+                paymentId = enrollment.PaymentId,
+                status = enrollment.Status.ToString(),
+                enrolledAt = enrollment.EnrolledAt
+            };
+        }
     }
 }

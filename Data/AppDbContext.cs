@@ -38,8 +38,10 @@ namespace SkillHive.Data
         public DbSet<Plan> Plans => Set<Plan>();
         public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
-        // ─── NEW ───
         public DbSet<Invoice> Invoices => Set<Invoice>();
+
+        // ─── NEW ───
+        public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -419,7 +421,6 @@ namespace SkillHive.Data
                 .IsUnique();
 
             // One active subscription per academy
-            // Enforced here because the notebook says academyId is unique
             modelBuilder.Entity<Subscription>()
                 .HasIndex(s => s.AcademyId)
                 .IsUnique();
@@ -438,7 +439,7 @@ namespace SkillHive.Data
                 .HasForeignKey(s => s.PlanId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // ─── NEW ─── Invoice configuration
+            // ─── Invoice configuration
 
             modelBuilder.Entity<Invoice>().ToTable("INVOICES");
 
@@ -447,37 +448,84 @@ namespace SkillHive.Data
                 .HasIndex(i => i.InvoiceNumber)
                 .IsUnique();
 
-            // Fast scoping: "all invoices for academy X"
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.AcademyId);
 
-            // Fast filtering: "all unpaid invoices", "all overdue invoices"
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.Status);
 
-            // Fast lookup: "all invoices for subscription X"
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.SubscriptionId);
 
-            // Invoice -> Subscription
             modelBuilder.Entity<Invoice>()
                 .HasOne(i => i.Subscription)
                 .WithMany(s => s.Invoices)
                 .HasForeignKey(i => i.SubscriptionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Invoice -> Academy
             modelBuilder.Entity<Invoice>()
                 .HasOne(i => i.Academy)
                 .WithMany()
                 .HasForeignKey(i => i.AcademyId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Invoice -> Plan
             modelBuilder.Entity<Invoice>()
                 .HasOne(i => i.Plan)
                 .WithMany()
                 .HasForeignKey(i => i.PlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ─── NEW ─── PaymentTransaction configuration
+
+            modelBuilder.Entity<PaymentTransaction>().ToTable("PAYMENT_TRANSACTIONS");
+
+            // Reference must be globally unique — this is what makes
+            // webhook idempotency possible (a reference is processed once).
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasIndex(p => p.Reference)
+                .IsUnique();
+
+            // Fast filtering by flow type (subscription vs. course purchase)
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasIndex(p => p.Purpose);
+
+            // Fast scoping for reporting
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasIndex(p => p.AcademyId);
+
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasIndex(p => p.StudentId);
+
+            // Fast lookup by status (e.g. "all PENDING", "all FAILED")
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasIndex(p => p.Status);
+
+            // PaymentTransaction -> Academy (nullable, Restrict)
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasOne(p => p.Academy)
+                .WithMany()
+                .HasForeignKey(p => p.AcademyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PaymentTransaction -> Invoice (nullable, Restrict)
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasOne(p => p.Invoice)
+                .WithMany()
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PaymentTransaction -> Student (nullable, Restrict)
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasOne(p => p.Student)
+                .WithMany()
+                .HasForeignKey(p => p.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PaymentTransaction -> Course (nullable, Restrict)
+            modelBuilder.Entity<PaymentTransaction>()
+                .HasOne(p => p.Course)
+                .WithMany()
+                .HasForeignKey(p => p.CourseId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

@@ -392,5 +392,42 @@ namespace SkillHive.Features.Invoices.Services
                 updatedAt = i.UpdatedAt
             };
         }
+                /// <summary>
+        /// Called by Payments when a Paystack webhook confirms success.
+        /// No DTO, no superadmin — the reference is the proof.
+        /// Idempotent: if invoice is already PAID, returns quietly.
+        /// </summary>
+        public async Task<object> ApplyPaymentSuccessAsync(int invoiceId)
+        {
+            var invoice = await _db.Invoices
+                .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
+
+            if (invoice == null)
+                throw new InvalidOperationException("Invoice not found");
+
+            if (invoice.Status == InvoiceStatus.PAID)
+                return await InvoiceToResponseAsync(invoiceId);
+
+            if (invoice.Status == InvoiceStatus.VOID)
+                throw new InvalidOperationException("Cannot pay a voided invoice");
+
+            invoice.Status = InvoiceStatus.PAID;
+            invoice.PaidAt = DateTime.UtcNow;
+            invoice.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            // Extend the subscription. Best-effort — invoice stays PAID if this fails.
+            try
+            {
+                await _subscriptions.ExtendSubscriptionAsync(invoice.SubscriptionId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Subscription extension failed for invoice {invoiceId}: {ex.Message}");
+            }
+
+            return await InvoiceToResponseAsync(invoiceId);
+        }
     }
 }
