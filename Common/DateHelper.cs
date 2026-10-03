@@ -1,7 +1,7 @@
 using SkillHive.Enums;
 namespace SkillHive.Common
 {
-  
+
     public static class DateHelper
     {
         /// <summary>
@@ -76,5 +76,32 @@ namespace SkillHive.Common
 
             return date.ToString("MMM dd, yyyy");
         }
+        /// <summary>
+        /// Parses a date string for use as an INCLUSIVE end-of-range.
+        /// If the input is date-only ("2026-10-03"), returns end-of-day UTC.
+        /// If the input includes a time ("2026-10-03T15:00:00Z"), returns that moment.
+        /// </summary>
+        public static DateTime ParseEndDate(string input)
+        {
+            var parsed = DateTime.Parse(input).ToUniversalTime();
+
+            // If no time component was provided, include the entire day
+            if (!input.Contains('T'))
+                return parsed.AddDays(1).AddTicks(-1);
+
+            return parsed;
+        }
+
+        /// <summary>
+        /// Parses a date string for use as an INCLUSIVE start-of-range.
+        /// If date-only, returns 00:00:00 UTC.
+        /// If time provided, returns that moment.
+        /// </summary>
+        public static DateTime ParseStartDate(string input)
+        {
+            return DateTime.Parse(input).ToUniversalTime();
+        }
     }
+
+
 }

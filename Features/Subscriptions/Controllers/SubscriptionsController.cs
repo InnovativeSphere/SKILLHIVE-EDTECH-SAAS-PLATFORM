@@ -185,7 +185,8 @@ namespace SkillHive.Features.Subscriptions.Controllers
         {
             try
             {
-                var result = await _subscriptionService.AssignSubscriptionAsync(dto);
+                var userId = JwtHelper.GetUserId(User);
+                var result = await _subscriptionService.AssignSubscriptionAsync(dto, userId);
                 return ApiResponse.Created(result, "Subscription assigned");
             }
             catch (InvalidOperationException ex)
@@ -208,7 +209,8 @@ namespace SkillHive.Features.Subscriptions.Controllers
         {
             try
             {
-                var result = await _subscriptionService.ChangePlanAsync(id, dto);
+                var userId = JwtHelper.GetUserId(User);
+                var result = await _subscriptionService.ChangePlanAsync(id, dto, userId);
                 return ApiResponse.Success(result, "Plan changed");
             }
             catch (InvalidOperationException ex)

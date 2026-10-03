@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Features.Auth.DTOs;
 using SkillHive.Features.Notifications.Services;
 using SkillHive.Features.Subscriptions.Services;
@@ -16,19 +17,22 @@ namespace SkillHive.Features.Auth.Services
         private readonly NotificationService _notifications;
         private readonly IConfiguration _config;
         private readonly SubscriptionService _subscriptions;
+        private readonly AuditService _audit;
 
         public AuthService(
             AppDbContext db,
             JwtHelper jwt,
             NotificationService notifications,
             IConfiguration config,
-            SubscriptionService subscriptions)
+            SubscriptionService subscriptions,
+            AuditService audit)
         {
             _db = db;
             _jwt = jwt;
             _notifications = notifications;
             _config = config;
             _subscriptions = subscriptions;
+            _audit = audit;
         }
 
         // ─── Register Academy Owner ────────────────────────────────
@@ -84,7 +88,6 @@ namespace SkillHive.Features.Auth.Services
                 await _db.SaveChangesAsync();
 
                 // Create trial subscription (7 days on Starter by default).
-                // Runs inside the same transaction — if it fails, the whole registration rolls back.
                 await _subscriptions.CreateTrialForAcademyAsync(academy.AcademyId);
 
                 var otp = TokenHelper.GenerateOtp();
@@ -100,6 +103,21 @@ namespace SkillHive.Features.Auth.Services
 
                 _db.VerificationTokens.Add(verificationToken);
                 await _db.SaveChangesAsync();
+
+                // ─── AUDIT ───
+                // Inside the transaction — if commit fails, this rolls back too.
+                await _audit.LogAsync(
+                    userId: owner.UserId,
+                    academyId: academy.AcademyId,
+                    action: AuditActions.AcademyRegistered,
+                    targetType: AuditTargetTypes.Academy,
+                    targetId: academy.AcademyId,
+                    metadata: new
+                    {
+                        academyName = academy.Name,
+                        ownerEmail = owner.Email,
+                        ownerFullName = owner.FullName
+                    });
 
                 await transaction.CommitAsync();
 
@@ -176,6 +194,15 @@ namespace SkillHive.Features.Auth.Services
             _db.VerificationTokens.Add(verificationToken);
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: student.UserId,
+                academyId: null,
+                action: AuditActions.StudentRegistered,
+                targetType: AuditTargetTypes.User,
+                targetId: student.UserId,
+                metadata: new { email = student.Email, fullName = student.FullName });
+
             var platformName = _config["App:Name"] ?? "SkillHive";
             var baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5075";
             var verifyLink = $"{baseUrl}/api/auth/verify-email?token={token}";
@@ -216,7 +243,21 @@ namespace SkillHive.Features.Auth.Services
                 .FirstOrDefaultAsync(u => u.Email == identifier || u.Username == identifier);
 
             if (user == null || !Utils.VerifyPassword(dto.Password, user.PasswordHash))
+            {
+                // Log failure only if the user exists — otherwise we have no userId
+                if (user != null)
+                {
+                    await _audit.LogAsync(
+                        userId: user.UserId,
+                        academyId: user.AcademyId,
+                        action: AuditActions.LoginFailed,
+                        targetType: AuditTargetTypes.User,
+                        targetId: user.UserId,
+                        metadata: new { reason = "Invalid password" });
+                }
+
                 throw new UnauthorizedAccessException("Invalid credentials");
+            }
 
             if (user.Status == UserStatus.INACTIVE)
                 throw new UnauthorizedAccessException("Your account has been deactivated");
@@ -232,6 +273,15 @@ namespace SkillHive.Features.Auth.Services
 
             user.LastLogin = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: user.UserId,
+                academyId: user.AcademyId,
+                action: AuditActions.LoginSuccess,
+                targetType: AuditTargetTypes.User,
+                targetId: user.UserId,
+                metadata: new { role = user.Role.ToString() });
 
             var token = _jwt.GenerateToken(
                 user.UserId,
@@ -288,6 +338,15 @@ namespace SkillHive.Features.Auth.Services
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: user.UserId,
+                academyId: user.AcademyId,
+                action: AuditActions.OtpVerified,
+                targetType: AuditTargetTypes.User,
+                targetId: user.UserId,
+                metadata: null);
+
             await _notifications.NotifyAsync(
                 user.UserId,
                 NotificationType.WELCOME,
@@ -323,6 +382,15 @@ namespace SkillHive.Features.Auth.Services
             token.User.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: token.User.UserId,
+                academyId: token.User.AcademyId,
+                action: AuditActions.EmailVerified,
+                targetType: AuditTargetTypes.User,
+                targetId: token.User.UserId,
+                metadata: null);
+
             await _notifications.NotifyAsync(
                 token.User.UserId,
                 NotificationType.WELCOME,
@@ -350,7 +418,6 @@ namespace SkillHive.Features.Auth.Services
             if (user.EmailVerified)
                 return new { message = "This email is already verified." };
 
-            // Invalidate prior unused tokens of the same type
             var oldTokens = await _db.VerificationTokens
                 .Where(v => v.UserId == user.UserId && !v.Used
                             && (v.Type == VerificationTokenType.OTP
@@ -431,11 +498,9 @@ namespace SkillHive.Features.Auth.Services
             var email = dto.Email.ToLowerInvariant().Trim();
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            // Always return the same message — never reveal whether the email exists
             if (user == null)
                 return new { message = "If an account with that email exists, a reset link has been sent." };
 
-            // Invalidate prior unused reset tokens
             var oldTokens = await _db.VerificationTokens
                 .Where(v => v.UserId == user.UserId && !v.Used
                             && v.Type == VerificationTokenType.PASSWORD_RESET)
@@ -497,6 +562,15 @@ namespace SkillHive.Features.Auth.Services
             token.User.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: token.User.UserId,
+                academyId: token.User.AcademyId,
+                action: AuditActions.PasswordReset,
+                targetType: AuditTargetTypes.User,
+                targetId: token.User.UserId,
+                metadata: null);
+
             return new { message = "Password reset successful. You can now log in." };
         }
 
@@ -526,6 +600,15 @@ namespace SkillHive.Features.Auth.Services
             user.Status = UserStatus.ACTIVE;
             user.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: user.UserId,
+                academyId: user.AcademyId,
+                action: AuditActions.InviteAccepted,
+                targetType: AuditTargetTypes.User,
+                targetId: user.UserId,
+                metadata: new { role = user.Role.ToString() });
 
             var jwt = _jwt.GenerateToken(
                 user.UserId,

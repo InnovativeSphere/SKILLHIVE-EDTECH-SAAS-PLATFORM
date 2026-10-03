@@ -21,21 +21,21 @@ namespace SkillHive.Features.Analytics.Services
 
         // ─── SHARED HELPERS ─────────────────────────────────
 
-        private static (DateTime from, DateTime to) ResolveDateRange(string? dateFrom, string? dateTo)
-        {
-            var to = !string.IsNullOrWhiteSpace(dateTo)
-                ? DateTime.Parse(dateTo).ToUniversalTime()
-                : DateTime.UtcNow;
+       private static (DateTime from, DateTime to) ResolveDateRange(string? dateFrom, string? dateTo)
+{
+    var to = !string.IsNullOrWhiteSpace(dateTo)
+        ? DateHelper.ParseEndDate(dateTo)
+        : DateTime.UtcNow;
 
-            var from = !string.IsNullOrWhiteSpace(dateFrom)
-                ? DateTime.Parse(dateFrom).ToUniversalTime()
-                : to.AddDays(-DefaultRangeDays);
+    var from = !string.IsNullOrWhiteSpace(dateFrom)
+        ? DateHelper.ParseStartDate(dateFrom)
+        : to.AddDays(-DefaultRangeDays);
 
-            if (from > to)
-                throw new InvalidOperationException("dateFrom must be before dateTo");
+    if (from > to)
+        throw new InvalidOperationException("dateFrom must be before dateTo");
 
-            return (from, to);
-        }
+    return (from, to);
+}
 
         // ═══════════════════════════════════════════════════
         // STUDENT ANALYTICS

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Features.Notifications.Services;
 using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Features.Users.DTOs;
@@ -15,17 +16,20 @@ namespace SkillHive.Features.Users.Services
         private readonly NotificationService _notifications;
         private readonly IConfiguration _config;
         private readonly SubscriptionService _subscriptions;
+        private readonly AuditService _audit;
 
         public StaffService(
             AppDbContext db,
             NotificationService notifications,
             IConfiguration config,
-            SubscriptionService subscriptions)
+            SubscriptionService subscriptions,
+            AuditService audit)
         {
             _db = db;
             _notifications = notifications;
             _config = config;
             _subscriptions = subscriptions;
+            _audit = audit;
         }
 
         // ─── Invite a Staff Member (Owner only) ────────────────────
@@ -107,6 +111,20 @@ namespace SkillHive.Features.Users.Services
                     ExpiryHours = 72
                 });
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: ownerUserId,
+                academyId: owner.AcademyId.Value,
+                action: AuditActions.StaffInvited,
+                targetType: AuditTargetTypes.Staff,
+                targetId: staff.UserId,
+                metadata: new
+                {
+                    email = staff.Email,
+                    role = staff.Role.ToString(),
+                    fullName = staff.FullName
+                });
+
             return new
             {
                 userId = staff.UserId,
@@ -165,11 +183,24 @@ namespace SkillHive.Features.Users.Services
             if (staff.Role == UserRole.ACADEMY_OWNER)
                 throw new InvalidOperationException("Cannot modify the academy owner");
 
-            if (!string.IsNullOrWhiteSpace(dto.FullName))
-                staff.FullName = Utils.ToTitleCase(Utils.SanitizeInput(dto.FullName));
+            // Capture the fields being changed — for audit metadata
+            var changes = new Dictionary<string, object>();
 
-            if (dto.Phone != null)
+            if (!string.IsNullOrWhiteSpace(dto.FullName))
+            {
+                var newName = Utils.ToTitleCase(Utils.SanitizeInput(dto.FullName));
+                if (newName != staff.FullName)
+                {
+                    changes["fullName"] = new { from = staff.FullName, to = newName };
+                    staff.FullName = newName;
+                }
+            }
+
+            if (dto.Phone != null && dto.Phone != staff.Phone)
+            {
+                changes["phone"] = new { from = staff.Phone, to = dto.Phone };
                 staff.Phone = dto.Phone;
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Role))
             {
@@ -179,11 +210,24 @@ namespace SkillHive.Features.Users.Services
                 if (newRole != UserRole.INSTRUCTOR && newRole != UserRole.MODERATOR)
                     throw new InvalidOperationException("Role must be INSTRUCTOR or MODERATOR");
 
-                staff.Role = newRole;
+                if (newRole != staff.Role)
+                {
+                    changes["role"] = new { from = staff.Role.ToString(), to = newRole.ToString() };
+                    staff.Role = newRole;
+                }
             }
 
             staff.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: ownerUserId,
+                academyId: owner.AcademyId.Value,
+                action: AuditActions.StaffUpdated,
+                targetType: AuditTargetTypes.Staff,
+                targetId: staff.UserId,
+                metadata: changes.Count > 0 ? changes : null);
 
             return new
             {
@@ -219,6 +263,15 @@ namespace SkillHive.Features.Users.Services
             staff.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: ownerUserId,
+                academyId: owner.AcademyId.Value,
+                action: AuditActions.StaffDeactivated,
+                targetType: AuditTargetTypes.Staff,
+                targetId: staff.UserId,
+                metadata: new { fullName = staff.FullName, role = staff.Role.ToString() });
+
             return new { userId = staff.UserId, status = staff.Status.ToString(), message = "Staff deactivated" };
         }
 
@@ -236,6 +289,15 @@ namespace SkillHive.Features.Users.Services
             staff.Status = UserStatus.ACTIVE;
             staff.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: ownerUserId,
+                academyId: owner.AcademyId.Value,
+                action: AuditActions.StaffReactivated,
+                targetType: AuditTargetTypes.Staff,
+                targetId: staff.UserId,
+                metadata: new { fullName = staff.FullName, role = staff.Role.ToString() });
 
             return new { userId = staff.UserId, status = staff.Status.ToString(), message = "Staff reactivated" };
         }

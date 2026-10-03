@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Models;
 
 namespace SkillHive.Features.Certificates.Services
@@ -12,17 +13,20 @@ namespace SkillHive.Features.Certificates.Services
         private readonly PdfService _pdfService;
         private readonly CloudinaryService _cloudinary;
         private readonly IConfiguration _config;
+        private readonly AuditService _audit;
 
         public CertificateService(
             AppDbContext db,
             PdfService pdfService,
             CloudinaryService cloudinary,
-            IConfiguration config)
+            IConfiguration config,
+            AuditService audit)
         {
             _db = db;
             _pdfService = pdfService;
             _cloudinary = cloudinary;
             _config = config;
+            _audit = audit;
         }
 
         // ─── Auto-generation on enrollment completion ────────────
@@ -86,10 +90,24 @@ namespace SkillHive.Features.Certificates.Services
 
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            // Actor = the student (system-triggered on their behalf)
+            await _audit.LogAsync(
+                userId: enrollment.StudentId,
+                academyId: enrollment.Course.AcademyId,
+                action: AuditActions.CertificateIssued,
+                targetType: AuditTargetTypes.Certificate,
+                targetId: certificate.CertificateId,
+                metadata: new
+                {
+                    verificationCode = certificate.VerificationCode,
+                    courseId = certificate.CourseId,
+                    courseTitle = enrollment.Course.Title
+                });
+
             return certificate;
         }
 
-        // ─── Student: My certificates ────────────────────────────
         // ─── Student: My certificates ────────────────────────────
         public async Task<List<object>> GetMyCertificatesAsync(int studentId)
         {
@@ -229,6 +247,15 @@ namespace SkillHive.Features.Certificates.Services
             certificate.RevokedReason = Utils.SanitizeInput(reason);
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterId,
+                academyId: certificate.AcademyId,
+                action: AuditActions.CertificateRevoked,
+                targetType: AuditTargetTypes.Certificate,
+                targetId: certificate.CertificateId,
+                metadata: new { reason = certificate.RevokedReason });
+
             return new
             {
                 certificateId = certificate.CertificateId,
@@ -295,6 +322,20 @@ namespace SkillHive.Features.Certificates.Services
             _db.Certificates.Add(newCertificate);
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterId,
+                academyId: certificate.AcademyId,
+                action: AuditActions.CertificateReissued,
+                targetType: AuditTargetTypes.Certificate,
+                targetId: newCertificate.CertificateId,
+                metadata: new
+                {
+                    oldCertificateId = certificate.CertificateId,
+                    newVerificationCode = newCertificate.VerificationCode,
+                    reason = reason != null ? Utils.SanitizeInput(reason) : null
+                });
+
             return new
             {
                 oldCertificateId = certificate.CertificateId,
@@ -304,7 +345,6 @@ namespace SkillHive.Features.Certificates.Services
             };
         }
 
-        // ─── List academy certificates ───────────────────────────
         // ─── List academy certificates ───────────────────────────
         public async Task<List<object>> ListAcademyCertificatesAsync(int academyId, int? courseId)
         {
@@ -341,6 +381,7 @@ namespace SkillHive.Features.Certificates.Services
 
             return certificates.Cast<object>().ToList();
         }
+
         public async Task<object> RegenerateForEnrollmentAsync(int enrollmentId, int requesterId, UserRole role, int? academyId)
         {
             var enrollment = await _db.Enrollments
@@ -379,5 +420,4 @@ namespace SkillHive.Features.Certificates.Services
             };
         }
     }
-
 }

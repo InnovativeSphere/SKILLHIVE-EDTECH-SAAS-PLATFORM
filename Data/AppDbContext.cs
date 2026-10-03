@@ -40,8 +40,10 @@ namespace SkillHive.Data
 
         public DbSet<Invoice> Invoices => Set<Invoice>();
 
-        // ─── NEW ───
         public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+
+        // ─── NEW ───
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -443,7 +445,6 @@ namespace SkillHive.Data
 
             modelBuilder.Entity<Invoice>().ToTable("INVOICES");
 
-            // Invoice number must be globally unique — the retry loop depends on this
             modelBuilder.Entity<Invoice>()
                 .HasIndex(i => i.InvoiceNumber)
                 .IsUnique();
@@ -475,57 +476,83 @@ namespace SkillHive.Data
                 .HasForeignKey(i => i.PlanId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // ─── NEW ─── PaymentTransaction configuration
+            // ─── PaymentTransaction configuration
 
             modelBuilder.Entity<PaymentTransaction>().ToTable("PAYMENT_TRANSACTIONS");
 
-            // Reference must be globally unique — this is what makes
-            // webhook idempotency possible (a reference is processed once).
             modelBuilder.Entity<PaymentTransaction>()
                 .HasIndex(p => p.Reference)
                 .IsUnique();
 
-            // Fast filtering by flow type (subscription vs. course purchase)
             modelBuilder.Entity<PaymentTransaction>()
                 .HasIndex(p => p.Purpose);
 
-            // Fast scoping for reporting
             modelBuilder.Entity<PaymentTransaction>()
                 .HasIndex(p => p.AcademyId);
 
             modelBuilder.Entity<PaymentTransaction>()
                 .HasIndex(p => p.StudentId);
 
-            // Fast lookup by status (e.g. "all PENDING", "all FAILED")
             modelBuilder.Entity<PaymentTransaction>()
                 .HasIndex(p => p.Status);
 
-            // PaymentTransaction -> Academy (nullable, Restrict)
             modelBuilder.Entity<PaymentTransaction>()
                 .HasOne(p => p.Academy)
                 .WithMany()
                 .HasForeignKey(p => p.AcademyId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // PaymentTransaction -> Invoice (nullable, Restrict)
             modelBuilder.Entity<PaymentTransaction>()
                 .HasOne(p => p.Invoice)
                 .WithMany()
                 .HasForeignKey(p => p.InvoiceId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // PaymentTransaction -> Student (nullable, Restrict)
             modelBuilder.Entity<PaymentTransaction>()
                 .HasOne(p => p.Student)
                 .WithMany()
                 .HasForeignKey(p => p.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // PaymentTransaction -> Course (nullable, Restrict)
             modelBuilder.Entity<PaymentTransaction>()
                 .HasOne(p => p.Course)
                 .WithMany()
                 .HasForeignKey(p => p.CourseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ─── NEW ─── AuditLog configuration
+
+            modelBuilder.Entity<AuditLog>().ToTable("AUDIT_LOGS");
+
+            // Query patterns:
+            //   "What did user X do?" — superadmin forensics
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.UserId);
+
+            //   "What happened in academy X?" — owner dashboard
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.AcademyId);
+
+            //   "All CERTIFICATE_REVOKED events" — security audits
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.Action);
+
+            //   "Everything in the last 7 days" — dashboards, retention
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.CreatedAt);
+
+            // AuditLog -> User (Restrict — evidence cannot be deleted)
+            modelBuilder.Entity<AuditLog>()
+                .HasOne(a => a.User)
+                .WithMany()
+                .HasForeignKey(a => a.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // AuditLog -> Academy (Restrict)
+            modelBuilder.Entity<AuditLog>()
+                .HasOne(a => a.Academy)
+                .WithMany()
+                .HasForeignKey(a => a.AcademyId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

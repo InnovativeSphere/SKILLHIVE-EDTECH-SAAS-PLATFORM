@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Features.Email.Services;
 using SkillHive.Features.Enrollments.Services;
 using SkillHive.Features.Invoices.Services;
@@ -22,6 +23,7 @@ namespace SkillHive.Features.Payments.Services
         private readonly EmailService _email;
         private readonly Logger _logger;
         private readonly IConfiguration _config;
+        private readonly AuditService _audit;
 
         public PaymentService(
             AppDbContext db,
@@ -30,7 +32,8 @@ namespace SkillHive.Features.Payments.Services
             NotificationService notifications,
             EmailService email,
             Logger logger,
-            IConfiguration config)
+            IConfiguration config,
+            AuditService audit)
         {
             _db = db;
             _invoices = invoices;
@@ -39,14 +42,11 @@ namespace SkillHive.Features.Payments.Services
             _email = email;
             _logger = logger;
             _config = config;
+            _audit = audit;
         }
 
         // ─── INITIALIZE — SUBSCRIPTION ──────────────────────
 
-        /// <summary>
-        /// Owner pays for a subscription invoice.
-        /// Derives amount, email, and academy from the invoice — never from the client.
-        /// </summary>
         public async Task<object> InitializeSubscriptionPaymentAsync(
             InitializeSubscriptionPaymentDto dto, int userId)
         {
@@ -61,7 +61,6 @@ namespace SkillHive.Features.Payments.Services
             if (invoice.Status != InvoiceStatus.UNPAID)
                 throw new InvalidOperationException($"Cannot pay an invoice with status {invoice.Status}");
 
-            // The user initiating the payment must own the academy that owes the invoice
             var requester = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
             if (requester == null)
                 throw new InvalidOperationException("User not found");
@@ -69,7 +68,6 @@ namespace SkillHive.Features.Payments.Services
             if (requester.AcademyId != invoice.AcademyId)
                 throw new UnauthorizedAccessException("You can only pay invoices for your own academy");
 
-            // Fetch the owner's email for Paystack
             var owner = await _db.Users.FirstOrDefaultAsync(u => u.AcademyId == invoice.AcademyId
                                                                   && u.Role == UserRole.ACADEMY_OWNER);
 
@@ -80,8 +78,6 @@ namespace SkillHive.Features.Payments.Services
             var amountKobo = PaymentHelper.ConvertNairaToKobo(amountNaira);
             var reference = TokenHelper.GeneratePaymentReference();
 
-            // Persist the PENDING transaction BEFORE calling Paystack.
-            // If Paystack fails, we have a record of the attempt.
             var transaction = new PaymentTransaction
             {
                 Reference = reference,
@@ -99,7 +95,6 @@ namespace SkillHive.Features.Payments.Services
             _db.PaymentTransactions.Add(transaction);
             await _db.SaveChangesAsync();
 
-            // Call Paystack
             var initResponse = await CallPaystackInitializeAsync(
                 email: owner.Email,
                 amountKobo: amountKobo,
@@ -139,10 +134,6 @@ namespace SkillHive.Features.Payments.Services
 
         // ─── INITIALIZE — COURSE PURCHASE ───────────────────
 
-        /// <summary>
-        /// Student pays for a paid course.
-        /// Derives amount from the course; student identity comes from JWT.
-        /// </summary>
         public async Task<object> InitializeCoursePaymentAsync(
             InitializeCoursePaymentDto dto, int userId)
         {
@@ -176,7 +167,6 @@ namespace SkillHive.Features.Payments.Services
             if (student.Role != UserRole.STUDENT)
                 throw new InvalidOperationException("Only students can purchase courses");
 
-            // Already enrolled?
             var alreadyEnrolled = await _db.Enrollments
                 .AnyAsync(e => e.StudentId == userId
                                && e.CourseId == dto.CourseId
@@ -185,7 +175,6 @@ namespace SkillHive.Features.Payments.Services
             if (alreadyEnrolled)
                 throw new InvalidOperationException("You are already enrolled in this course");
 
-            // Prevent duplicate PENDING payments for the same course by the same student
             var pendingDuplicate = await _db.PaymentTransactions
                 .AnyAsync(p => p.StudentId == userId
                                && p.CourseId == dto.CourseId
@@ -257,11 +246,6 @@ namespace SkillHive.Features.Payments.Services
 
         // ─── WEBHOOK ────────────────────────────────────────
 
-        /// <summary>
-        /// Receives Paystack webhook. Verifies signature, processes only charge.success,
-        /// and is idempotent — safe to call multiple times for the same reference.
-        /// Returns a status object (never throws) so Paystack gets a 200 and doesn't retry.
-        /// </summary>
         public async Task<object> HandleWebhookAsync(string signature, byte[] rawBody)
         {
             var secretKey = _config["Paystack:SecretKey"];
@@ -319,11 +303,9 @@ namespace SkillHive.Features.Payments.Services
                 return new { status = "error", message = "Transaction not found" };
             }
 
-            // Idempotency — already processed?
             if (transaction.Status == PaymentStatus.SUCCESS)
                 return new { status = "already_processed" };
 
-            // Verify the amount matches — Paystack sends kobo
             if (data.TryGetProperty("amount", out var amountProp))
             {
                 var receivedKobo = amountProp.GetInt64();
@@ -337,12 +319,31 @@ namespace SkillHive.Features.Payments.Services
                     transaction.UpdatedAt = DateTime.UtcNow;
                     await _db.SaveChangesAsync();
 
+                    // ─── AUDIT ───
+                    var actorUserId = await ResolveActorUserIdAsync(transaction);
+                    if (actorUserId.HasValue)
+                    {
+                        await _audit.LogAsync(
+                            userId: actorUserId.Value,
+                            academyId: transaction.AcademyId,
+                            action: AuditActions.PaymentFailed,
+                            targetType: AuditTargetTypes.Payment,
+                            targetId: transaction.PaymentId,
+                            metadata: new
+                            {
+                                reference = transaction.Reference,
+                                amount = transaction.Amount,
+                                reason = "Amount mismatch",
+                                expectedKobo = expectedKobo,
+                                receivedKobo = receivedKobo
+                            });
+                    }
+
                     _logger.Error($"Amount mismatch for reference {reference}: expected {expectedKobo}, got {receivedKobo}");
                     return new { status = "error", message = "Amount mismatch" };
                 }
             }
 
-            // Extract fields from webhook
             var channel = data.TryGetProperty("channel", out var ch) ? ch.GetString() : null;
             var paidAtStr = data.TryGetProperty("paid_at", out var paid) ? paid.GetString() : null;
             var paidAt = !string.IsNullOrWhiteSpace(paidAtStr)
@@ -364,10 +365,6 @@ namespace SkillHive.Features.Payments.Services
 
         // ─── VERIFY (fallback after redirect) ───────────────
 
-        /// <summary>
-        /// Frontend calls this after Paystack redirects the user back.
-        /// Reconciles if the webhook hasn't fired yet — belt and braces.
-        /// </summary>
         public async Task<object> VerifyPaymentAsync(VerifyPaymentDto dto, int userId)
         {
             var transaction = await _db.PaymentTransactions
@@ -376,10 +373,8 @@ namespace SkillHive.Features.Payments.Services
             if (transaction == null)
                 throw new InvalidOperationException("Payment reference not found");
 
-            // Ownership check — the caller must own this transaction
             if (transaction.StudentId.HasValue && transaction.StudentId.Value != userId)
             {
-                // Course purchase — check the student
                 throw new UnauthorizedAccessException("You can only verify your own payments");
             }
             if (transaction.AcademyId.HasValue)
@@ -389,28 +384,23 @@ namespace SkillHive.Features.Payments.Services
                     throw new UnauthorizedAccessException("You can only verify your own academy's payments");
             }
 
-            // Already processed?
             if (transaction.Status == PaymentStatus.SUCCESS)
                 return BuildVerifyResponse(transaction);
 
             if (transaction.Status == PaymentStatus.FAILED || transaction.Status == PaymentStatus.REFUNDED)
                 return BuildVerifyResponse(transaction);
 
-            // Still pending — ask Paystack directly
             var verifyResponse = await CallPaystackVerifyAsync(transaction.Reference);
             if (!verifyResponse.IsSuccess)
             {
-                // Paystack couldn't verify — return current pending state
                 return BuildVerifyResponse(transaction);
             }
 
             if (!verifyResponse.Paid)
             {
-                // Paystack says it's not successful
                 return BuildVerifyResponse(transaction);
             }
 
-            // Webhook didn't fire (or is delayed) — reconcile now
             transaction.Status = PaymentStatus.SUCCESS;
             transaction.Channel = verifyResponse.Channel;
             transaction.PaidAt = verifyResponse.PaidAt ?? DateTime.UtcNow;
@@ -425,21 +415,51 @@ namespace SkillHive.Features.Payments.Services
 
         // ─── SHARED SUCCESS PROCESSING ──────────────────────
 
-        /// <summary>
-        /// Called from both webhook and verify.
-        /// Branches on Purpose and triggers the downstream side effect
-        /// (invoice paid + subscription extended, OR enrollment created).
-        /// Idempotency is guaranteed upstream — this runs at most once per reference.
-        /// </summary>
         private async Task ProcessSuccessfulPaymentAsync(PaymentTransaction transaction)
         {
+            // ─── AUDIT ───
+            // Log the payment success BEFORE downstream side effects.
+            // The money moved — that fact belongs in the audit trail regardless
+            // of whether invoice/enrollment updates succeed afterwards.
+            var actorUserId = await ResolveActorUserIdAsync(transaction);
+            if (actorUserId.HasValue)
+            {
+                object metadata = transaction.Purpose == PaymentPurpose.SUBSCRIPTION
+                    ? new
+                    {
+                        reference = transaction.Reference,
+                        amount = transaction.Amount,
+                        currency = transaction.Currency,
+                        purpose = "SUBSCRIPTION",
+                        invoiceId = transaction.InvoiceId,
+                        channel = transaction.Channel
+                    }
+                    : new
+                    {
+                        reference = transaction.Reference,
+                        amount = transaction.Amount,
+                        currency = transaction.Currency,
+                        purpose = "COURSE_PURCHASE",
+                        courseId = transaction.CourseId,
+                        studentId = transaction.StudentId,
+                        channel = transaction.Channel
+                    };
+
+                await _audit.LogAsync(
+                    userId: actorUserId.Value,
+                    academyId: transaction.AcademyId,
+                    action: AuditActions.PaymentSuccessful,
+                    targetType: AuditTargetTypes.Payment,
+                    targetId: transaction.PaymentId,
+                    metadata: metadata);
+            }
+
             try
             {
                 if (transaction.Purpose == PaymentPurpose.SUBSCRIPTION && transaction.InvoiceId.HasValue)
                 {
                     await _invoices.ApplyPaymentSuccessAsync(transaction.InvoiceId.Value);
 
-                    // Receipt notification to owner
                     var owner = await _db.Users
                         .FirstOrDefaultAsync(u => u.AcademyId == transaction.AcademyId
                                                   && u.Role == UserRole.ACADEMY_OWNER);
@@ -472,7 +492,6 @@ namespace SkillHive.Features.Payments.Services
                         transaction.CourseId.Value,
                         transaction.PaymentId);
 
-                    // Receipt + enrollment confirmation to student
                     var student = await _db.Users.FirstOrDefaultAsync(u => u.UserId == transaction.StudentId.Value);
                     var course = await _db.Courses.FirstOrDefaultAsync(c => c.CourseId == transaction.CourseId.Value);
 
@@ -499,12 +518,33 @@ namespace SkillHive.Features.Payments.Services
             }
             catch (Exception ex)
             {
-                // Payment is already SUCCESS in DB. Downstream side effects are best-effort.
-                // A scheduled reconciliation job (V2) can retry failures.
                 _logger.Error(
                     $"Post-payment processing failed for reference {transaction.Reference}",
                     ex);
             }
+        }
+
+        // ─── ACTOR RESOLUTION ───────────────────────────────
+
+        /// <summary>
+        /// Determines who the "actor" is for an audit log entry tied to a payment.
+        /// Course purchase → the student. Subscription → the academy owner.
+        /// Returns null if neither can be determined (audit is skipped, not failed).
+        /// </summary>
+        private async Task<int?> ResolveActorUserIdAsync(PaymentTransaction transaction)
+        {
+            if (transaction.StudentId.HasValue)
+                return transaction.StudentId.Value;
+
+            if (transaction.AcademyId.HasValue)
+            {
+                var owner = await _db.Users
+                    .FirstOrDefaultAsync(u => u.AcademyId == transaction.AcademyId.Value
+                                              && u.Role == UserRole.ACADEMY_OWNER);
+                return owner?.UserId;
+            }
+
+            return null;
         }
 
         // ─── PAYSTACK HTTP CALLS ────────────────────────────

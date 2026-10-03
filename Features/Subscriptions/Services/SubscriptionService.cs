@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Features.Subscriptions.DTOs;
 using SkillHive.Models;
 
@@ -10,18 +11,16 @@ namespace SkillHive.Features.Subscriptions.Services
     public class SubscriptionService
     {
         private readonly AppDbContext _db;
+        private readonly AuditService _audit;
 
-        public SubscriptionService(AppDbContext db)
+        public SubscriptionService(AppDbContext db, AuditService audit)
         {
             _db = db;
+            _audit = audit;
         }
 
         // ─── PLAN OPERATIONS ────────────────────────────────
 
-        /// <summary>
-        /// Create a new plan. Superadmin only (enforced at controller).
-        /// Slug auto-generated from Name if not provided, then ensured unique.
-        /// </summary>
         public async Task<object> CreatePlanAsync(CreatePlanDto dto)
         {
             var name = Utils.ToTitleCase(Utils.SanitizeInput(dto.Name));
@@ -59,9 +58,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return PlanToResponse(plan);
         }
 
-        /// <summary>
-        /// Public listing — only active + public plans, sorted by price.
-        /// </summary>
         public async Task<List<object>> GetPublicPlansAsync()
         {
             var plans = await _db.Plans
@@ -72,9 +68,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return plans.Select(p => PlanToResponse(p)).Cast<object>().ToList();
         }
 
-        /// <summary>
-        /// Superadmin listing — includes inactive/hidden plans.
-        /// </summary>
         public async Task<List<object>> GetAllPlansAsync()
         {
             var plans = await _db.Plans
@@ -84,9 +77,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return plans.Select(p => PlanToResponse(p)).Cast<object>().ToList();
         }
 
-        /// <summary>
-        /// Single plan by ID. Public for active ones; superadmin can see any.
-        /// </summary>
         public async Task<object> GetPlanAsync(int planId)
         {
             var plan = await _db.Plans.FirstOrDefaultAsync(p => p.PlanId == planId);
@@ -105,10 +95,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return PlanToResponse(plan);
         }
 
-        /// <summary>
-        /// Update plan. Slug is intentionally not editable — see DTO comment.
-        /// Price change allowed but flagged if active subscriptions exist.
-        /// </summary>
         public async Task<object> UpdatePlanAsync(int planId, UpdatePlanDto dto)
         {
             var plan = await _db.Plans.FirstOrDefaultAsync(p => p.PlanId == planId);
@@ -154,9 +140,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return PlanToResponse(plan);
         }
 
-        /// <summary>
-        /// Soft-delete: sets IsActive = false. Blocked if any active subscriptions use it.
-        /// </summary>
         public async Task<object> DeactivatePlanAsync(int planId)
         {
             var plan = await _db.Plans.FirstOrDefaultAsync(p => p.PlanId == planId);
@@ -187,10 +170,9 @@ namespace SkillHive.Features.Subscriptions.Services
         // ─── SUBSCRIPTION OPERATIONS ────────────────────────
 
         /// <summary>
-        /// Superadmin manual assignment. If the academy already has a subscription,
-        /// this updates it in place (one per academy rule).
+        /// Superadmin manual assignment. Now takes requesterUserId for audit trail.
         /// </summary>
-        public async Task<object> AssignSubscriptionAsync(AssignSubscriptionDto dto)
+        public async Task<object> AssignSubscriptionAsync(AssignSubscriptionDto dto, int requesterUserId)
         {
             var academy = await _db.Academies.FirstOrDefaultAsync(a => a.AcademyId == dto.AcademyId);
             if (academy == null)
@@ -223,6 +205,22 @@ namespace SkillHive.Features.Subscriptions.Services
                 existing.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
 
+                // ─── AUDIT ───
+                await _audit.LogAsync(
+                    userId: requesterUserId,
+                    academyId: dto.AcademyId,
+                    action: AuditActions.SubscriptionAssigned,
+                    targetType: AuditTargetTypes.Subscription,
+                    targetId: existing.SubscriptionId,
+                    metadata: new
+                    {
+                        planId = dto.PlanId,
+                        planName = plan.Name,
+                        startDate = existing.StartDate,
+                        endDate = existing.EndDate,
+                        update = true
+                    });
+
                 return SubscriptionToResponse(existing, plan);
             }
 
@@ -242,16 +240,28 @@ namespace SkillHive.Features.Subscriptions.Services
             _db.Subscriptions.Add(subscription);
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterUserId,
+                academyId: dto.AcademyId,
+                action: AuditActions.SubscriptionAssigned,
+                targetType: AuditTargetTypes.Subscription,
+                targetId: subscription.SubscriptionId,
+                metadata: new
+                {
+                    planId = dto.PlanId,
+                    planName = plan.Name,
+                    startDate = subscription.StartDate,
+                    endDate = subscription.EndDate,
+                    update = false
+                });
+
             return SubscriptionToResponse(subscription, plan);
         }
 
-        /// <summary>
-        /// Owner gets their own subscription. Superadmin can specify any academyId.
-        /// </summary>
         public async Task<object> GetSubscriptionForAcademyAsync(
             int requesterUserId, UserRole role, int? requesterAcademyId, int targetAcademyId)
         {
-            // Non-superadmin can only fetch their own
             if (role != UserRole.SUPER_ADMIN && requesterAcademyId != targetAcademyId)
                 throw new UnauthorizedAccessException("You can only view your own academy's subscription");
 
@@ -266,10 +276,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return SubscriptionToResponse(subscription, subscription.Plan, subscription.Academy);
         }
 
-                /// <summary>
-        /// Owner shortcut — reads academyId from the JWT context.
-        /// Prevents the owner from needing to know their own academyId.
-        /// </summary>
         public async Task<object> GetMySubscriptionAsync(int requesterAcademyId)
         {
             var subscription = await _db.Subscriptions
@@ -283,11 +289,7 @@ namespace SkillHive.Features.Subscriptions.Services
             return SubscriptionToResponse(subscription, subscription.Plan, subscription.Academy);
         }
 
-        /// <summary>
-        /// Change plan mid-cycle. Upgrades apply immediately; downgrades blocked if
-        /// current usage exceeds new plan's limits.
-        /// </summary>
-        public async Task<object> ChangePlanAsync(int subscriptionId, ChangePlanDto dto)
+        public async Task<object> ChangePlanAsync(int subscriptionId, ChangePlanDto dto, int requesterUserId)
         {
             var subscription = await _db.Subscriptions
                 .Include(s => s.Plan)
@@ -311,7 +313,9 @@ namespace SkillHive.Features.Subscriptions.Services
             if (newPlan.PlanId == subscription.PlanId)
                 throw new InvalidOperationException("Academy is already on this plan");
 
-            // Block downgrade if current usage exceeds new plan's limits
+            var oldPlanId = subscription.PlanId;
+            var oldPlanName = subscription.Plan.Name;
+
             var isDowngrade = newPlan.Price < subscription.Plan.Price;
             if (isDowngrade)
             {
@@ -333,7 +337,6 @@ namespace SkillHive.Features.Subscriptions.Services
 
             subscription.PlanId = dto.NewPlanId;
 
-            // Upgrades: reset end date from now, based on new plan's interval
             if (!isDowngrade)
             {
                 subscription.StartDate = DateTime.UtcNow;
@@ -344,13 +347,26 @@ namespace SkillHive.Features.Subscriptions.Services
             subscription.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterUserId,
+                academyId: subscription.AcademyId,
+                action: AuditActions.SubscriptionPlanChanged,
+                targetType: AuditTargetTypes.Subscription,
+                targetId: subscription.SubscriptionId,
+                metadata: new
+                {
+                    fromPlanId = oldPlanId,
+                    fromPlanName = oldPlanName,
+                    toPlanId = newPlan.PlanId,
+                    toPlanName = newPlan.Name,
+                    direction = isDowngrade ? "downgrade" : "upgrade",
+                    reason = dto.Reason
+                });
+
             return SubscriptionToResponse(subscription, newPlan);
         }
 
-        /// <summary>
-        /// Cancel subscription. Keeps it in the DB, sets status to CANCELLED.
-        /// Owner can cancel their own; superadmin can cancel any.
-        /// </summary>
         public async Task<object> CancelSubscriptionAsync(
             int subscriptionId, int requesterUserId, UserRole role, int? requesterAcademyId, string reason)
         {
@@ -372,6 +388,15 @@ namespace SkillHive.Features.Subscriptions.Services
             subscription.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterUserId,
+                academyId: subscription.AcademyId,
+                action: AuditActions.SubscriptionCancelled,
+                targetType: AuditTargetTypes.Subscription,
+                targetId: subscription.SubscriptionId,
+                metadata: new { reason = Utils.SanitizeInput(reason) });
+
             return new
             {
                 subscriptionId = subscription.SubscriptionId,
@@ -382,13 +407,6 @@ namespace SkillHive.Features.Subscriptions.Services
             };
         }
 
-        /// <summary>
-        /// Superadmin-only. Used for policy violations or admin actions.
-        /// </summary>
-             /// <summary>
-        /// Suspend subscription. Owner can suspend their own; superadmin can suspend any.
-        /// Immediate effect — no access until reactivated.
-        /// </summary>
         public async Task<object> SuspendSubscriptionAsync(
             int subscriptionId, int requesterUserId, UserRole role, int? requesterAcademyId, string reason)
         {
@@ -412,6 +430,15 @@ namespace SkillHive.Features.Subscriptions.Services
             subscription.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterUserId,
+                academyId: subscription.AcademyId,
+                action: AuditActions.SubscriptionSuspended,
+                targetType: AuditTargetTypes.Subscription,
+                targetId: subscription.SubscriptionId,
+                metadata: new { reason = Utils.SanitizeInput(reason) });
+
             return new
             {
                 subscriptionId = subscription.SubscriptionId,
@@ -421,11 +448,6 @@ namespace SkillHive.Features.Subscriptions.Services
             };
         }
 
-                /// <summary>
-        /// Reactivate a suspended subscription. Owner can reactivate their own;
-        /// superadmin can reactivate any.
-        /// Fails if the end date has passed — in that case, use Payments to renew.
-        /// </summary>
         public async Task<object> ReactivateSubscriptionAsync(
             int subscriptionId, int requesterUserId, UserRole role, int? requesterAcademyId)
         {
@@ -452,6 +474,15 @@ namespace SkillHive.Features.Subscriptions.Services
             subscription.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: requesterUserId,
+                academyId: subscription.AcademyId,
+                action: AuditActions.SubscriptionReactivated,
+                targetType: AuditTargetTypes.Subscription,
+                targetId: subscription.SubscriptionId,
+                metadata: null);
+
             return new
             {
                 subscriptionId = subscription.SubscriptionId,
@@ -462,10 +493,8 @@ namespace SkillHive.Features.Subscriptions.Services
             };
         }
 
-        /// <summary>
-        /// Called by Payments on successful invoice payment.
-        /// Moves subscription to ACTIVE and extends end date by plan interval.
-        /// </summary>
+        // ─── AUTO (no audit — consequence of other events) ─
+
         public async Task<object> ActivateSubscriptionAsync(int subscriptionId)
         {
             var subscription = await _db.Subscriptions
@@ -488,12 +517,29 @@ namespace SkillHive.Features.Subscriptions.Services
             return SubscriptionToResponse(subscription, subscription.Plan);
         }
 
-        // ─── TRIAL CREATION ────────────────────────────────
+        public async Task<object> ExtendSubscriptionAsync(int subscriptionId)
+        {
+            var subscription = await _db.Subscriptions
+                .Include(s => s.Plan)
+                .FirstOrDefaultAsync(s => s.SubscriptionId == subscriptionId);
 
-        /// <summary>
-        /// Called by AuthService when an academy registers, and by SeedDemoAcademy.
-        /// Creates a 7-day trial on the given plan. Idempotent — no-op if a subscription exists.
-        /// </summary>
+            if (subscription == null)
+                throw new InvalidOperationException("Subscription not found");
+
+            var now = DateTime.UtcNow;
+            var baseDate = subscription.EndDate > now ? subscription.EndDate : now;
+
+            subscription.Status = SubscriptionStatus.ACTIVE;
+            subscription.EndDate = DateHelper.CalculateSubscriptionEndDate(baseDate, subscription.Plan.Interval);
+            subscription.GraceUntil = null;
+            subscription.CancelledAt = null;
+            subscription.UpdatedAt = now;
+
+            await _db.SaveChangesAsync();
+
+            return SubscriptionToResponse(subscription, subscription.Plan);
+        }
+
         public async Task<object> CreateTrialForAcademyAsync(int academyId, int? planId = null)
         {
             var existing = await _db.Subscriptions
@@ -502,7 +548,6 @@ namespace SkillHive.Features.Subscriptions.Services
             if (existing != null)
                 return SubscriptionToResponse(existing);
 
-            // Default to Starter if no planId provided
             int resolvedPlanId;
             if (planId.HasValue)
             {
@@ -541,10 +586,6 @@ namespace SkillHive.Features.Subscriptions.Services
 
         // ─── ENFORCEMENT HELPERS ────────────────────────────
 
-        /// <summary>
-        /// Used by Courses module before allowing a new course.
-        /// Returns (allowed, reason). Reason is null if allowed.
-        /// </summary>
         public async Task<(bool allowed, string? reason)> CanAddCourseAsync(int academyId)
         {
             var subscription = await _db.Subscriptions
@@ -572,9 +613,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return (true, null);
         }
 
-        /// <summary>
-        /// Used by Users/Staff module before inviting new staff.
-        /// </summary>
         public async Task<(bool allowed, string? reason)> CanAddStaffAsync(int academyId)
         {
             var subscription = await _db.Subscriptions
@@ -602,10 +640,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return (true, null);
         }
 
-        /// <summary>
-        /// Used by Enrollments module before allowing a new enrollment.
-        /// Only counts ACTIVE + COMPLETED enrollments against the cap.
-        /// </summary>
         public async Task<(bool allowed, string? reason)> CanEnrollStudentAsync(int academyId, int courseId)
         {
             var subscription = await _db.Subscriptions
@@ -634,10 +668,6 @@ namespace SkillHive.Features.Subscriptions.Services
             return (true, null);
         }
 
-        /// <summary>
-        /// Quick check — is the academy's subscription in a usable state?
-        /// Used by various modules as a preliminary guard.
-        /// </summary>
         public async Task<bool> IsSubscriptionUsableAsync(int academyId)
         {
             var subscription = await _db.Subscriptions
@@ -700,35 +730,6 @@ namespace SkillHive.Features.Subscriptions.Services
                 createdAt = s.CreatedAt,
                 updatedAt = s.UpdatedAt
             };
-        }
-                /// <summary>
-        /// Called by Payments/Invoices on successful payment for a renewal.
-        /// Extends the subscription from the current EndDate (or now, whichever is later).
-        /// Use this for renewals; use ActivateSubscriptionAsync for trial → active or
-        /// reactivation from expiry.
-        /// </summary>
-        public async Task<object> ExtendSubscriptionAsync(int subscriptionId)
-        {
-            var subscription = await _db.Subscriptions
-                .Include(s => s.Plan)
-                .FirstOrDefaultAsync(s => s.SubscriptionId == subscriptionId);
-
-            if (subscription == null)
-                throw new InvalidOperationException("Subscription not found");
-
-            var now = DateTime.UtcNow;
-            // Extend from current EndDate if still in the future; otherwise from now
-            var baseDate = subscription.EndDate > now ? subscription.EndDate : now;
-
-            subscription.Status = SubscriptionStatus.ACTIVE;
-            subscription.EndDate = DateHelper.CalculateSubscriptionEndDate(baseDate, subscription.Plan.Interval);
-            subscription.GraceUntil = null;
-            subscription.CancelledAt = null;
-            subscription.UpdatedAt = now;
-
-            await _db.SaveChangesAsync();
-
-            return SubscriptionToResponse(subscription, subscription.Plan);
         }
     }
 }

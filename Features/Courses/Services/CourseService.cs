@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Enums;
+using SkillHive.Features.Audit.Services;
 using SkillHive.Features.Courses.DTOs;
 using SkillHive.Features.Subscriptions.Services;
 using SkillHive.Models;
@@ -12,11 +13,13 @@ namespace SkillHive.Features.Courses.Services
     {
         private readonly AppDbContext _db;
         private readonly SubscriptionService _subscriptions;
+        private readonly AuditService _audit;
 
-        public CourseService(AppDbContext db, SubscriptionService subscriptions)
+        public CourseService(AppDbContext db, SubscriptionService subscriptions, AuditService audit)
         {
             _db = db;
             _subscriptions = subscriptions;
+            _audit = audit;
         }
 
         // ─── Public Browse ─────────────────────────────────────────
@@ -442,6 +445,15 @@ namespace SkillHive.Features.Courses.Services
             course.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: userId,
+                academyId: course.AcademyId,
+                action: AuditActions.CoursePublished,
+                targetType: AuditTargetTypes.Course,
+                targetId: course.CourseId,
+                metadata: new { title = course.Title });
+
             return new { courseId = course.CourseId, status = course.Status.ToString(), publishedAt = course.PublishedAt };
         }
 
@@ -463,6 +475,15 @@ namespace SkillHive.Features.Courses.Services
             course.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: userId,
+                academyId: course.AcademyId,
+                action: AuditActions.CourseRejected,
+                targetType: AuditTargetTypes.Course,
+                targetId: course.CourseId,
+                metadata: new { reason = course.RejectionReason });
+
             return new { courseId = course.CourseId, status = course.Status.ToString(), rejectionReason = course.RejectionReason };
         }
 
@@ -483,6 +504,15 @@ namespace SkillHive.Features.Courses.Services
             course.ArchivedAt = DateTime.UtcNow;
             course.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: userId,
+                academyId: course.AcademyId,
+                action: AuditActions.CourseArchived,
+                targetType: AuditTargetTypes.Course,
+                targetId: course.CourseId,
+                metadata: null);
 
             return new { courseId = course.CourseId, status = course.Status.ToString(), archivedAt = course.ArchivedAt };
         }

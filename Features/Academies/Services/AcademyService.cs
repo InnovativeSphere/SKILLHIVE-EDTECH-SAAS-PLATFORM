@@ -2,16 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using SkillHive.Common;
 using SkillHive.Data;
 using SkillHive.Features.Academies.DTOs;
+using SkillHive.Features.Audit.Services;
 
 namespace SkillHive.Features.Academies.Services
 {
     public class AcademyService
     {
         private readonly AppDbContext _db;
+        private readonly AuditService _audit;
 
-        public AcademyService(AppDbContext db)
+        public AcademyService(AppDbContext db, AuditService audit)
         {
             _db = db;
+            _audit = audit;
         }
 
         public async Task<object> GetPublicProfileAsync(string slug)
@@ -109,6 +112,15 @@ namespace SkillHive.Features.Academies.Services
 
             academy.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+
+            // ─── AUDIT ───
+            await _audit.LogAsync(
+                userId: userId,
+                academyId: academy.AcademyId,
+                action: AuditActions.AcademyProfileUpdated,
+                targetType: AuditTargetTypes.Academy,
+                targetId: academy.AcademyId,
+                metadata: null);
 
             return new
             {
