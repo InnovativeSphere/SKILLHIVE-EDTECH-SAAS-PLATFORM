@@ -25,24 +25,32 @@ namespace SkillHive.Features.Email.Services
                 .Build();
         }
 
-        public async Task SendAsync<T>(string to, string subject, string templateName, T model)
+        /// <summary>
+        /// Send an email using a RazorLight template and any model shape.
+        /// The model is passed as <see cref="object"/> deliberately — RazorLight's
+        /// non-generic overload uses DynamicAnonymousTypeWrapper, which is what
+        /// makes @Model.PropertyName resolve correctly for anonymous types.
+        /// Using SendAsync&lt;T&gt; here would compile the template against the
+        /// declared type instead of the runtime type, breaking property access.
+        /// </summary>
+        public async Task SendAsync(string to, string subject, string templateName, object model)
         {
             var html = await RenderTemplateAsync(templateName, model);
             await SendRawAsync(to, subject, html, attachments: null);
         }
 
-        public async Task SendWithAttachmentAsync<T>(
+        public async Task SendWithAttachmentAsync(
             string to,
             string subject,
             string templateName,
-            T model,
+            object model,
             IEnumerable<string> attachmentPaths)
         {
             var html = await RenderTemplateAsync(templateName, model);
             await SendRawAsync(to, subject, html, attachmentPaths);
         }
 
-        private async Task<string> RenderTemplateAsync<T>(string templateName, T model)
+        private async Task<string> RenderTemplateAsync(string templateName, object model)
         {
             var templateFile = $"{templateName}.cshtml";
             return await _razor.CompileRenderAsync(templateFile, model);
@@ -52,6 +60,10 @@ namespace SkillHive.Features.Email.Services
         {
             try
             {
+                // Diagnostic — visible in the console on every send.
+                // Remove this line once we've confirmed the fix and seen a few good sends.
+                _logger.Info($"[EMAIL] to={Utils.MaskEmail(to)} subject=\"{subject}\" htmlLength={html?.Length ?? 0}");
+
                 var message = new MimeMessage();
                 message.From.Add(MailboxAddress.Parse(_config["Smtp:From"]!));
                 message.To.Add(MailboxAddress.Parse(to));
@@ -71,10 +83,10 @@ namespace SkillHive.Features.Email.Services
                 message.Body = bodyBuilder.ToMessageBody();
 
                 using var client = new SmtpClient();
-               await client.ConnectAsync(
-    _config["Smtp:Host"],
-    int.Parse(_config["Smtp:Port"] ?? "465"),
-    SecureSocketOptions.SslOnConnect);
+                await client.ConnectAsync(
+                    _config["Smtp:Host"],
+                    int.Parse(_config["Smtp:Port"] ?? "465"),
+                    SecureSocketOptions.SslOnConnect);
                 await client.AuthenticateAsync(_config["Smtp:User"], _config["Smtp:Pass"]);
                 await client.SendAsync(message);
                 await client.DisconnectAsync(true);

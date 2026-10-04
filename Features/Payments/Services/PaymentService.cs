@@ -473,14 +473,16 @@ namespace SkillHive.Features.Payments.Services
                             $"Your payment of ₦{transaction.Amount:N2} has been received. Your subscription is now active.",
                             sendEmail: true,
                             emailTemplate: "payment-received",
-                            emailModel: new
-                            {
-                                FullName = owner.FullName,
-                                Amount = transaction.Amount,
-                                Currency = transaction.Currency,
-                                Reference = transaction.Reference,
-                                PaidAt = transaction.PaidAt ?? DateTime.UtcNow
-                            });
+                           emailModel: new
+                           {
+                               FullName = owner.FullName,
+                               Amount = transaction.Amount,
+                               Currency = transaction.Currency,
+                               Reference = transaction.Reference,
+                               PaidAt = transaction.PaidAt ?? DateTime.UtcNow,
+                               CourseTitle = (string?)null,
+                               PlatformName = _config["App:Name"] ?? "SkillHive"
+                           });
                     }
                 }
                 else if (transaction.Purpose == PaymentPurpose.COURSE_PURCHASE
@@ -504,15 +506,16 @@ namespace SkillHive.Features.Payments.Services
                             $"You've successfully purchased {course.Title}. Happy learning!",
                             sendEmail: true,
                             emailTemplate: "payment-received",
-                            emailModel: new
-                            {
-                                FullName = student.FullName,
-                                Amount = transaction.Amount,
-                                Currency = transaction.Currency,
-                                Reference = transaction.Reference,
-                                PaidAt = transaction.PaidAt ?? DateTime.UtcNow,
-                                CourseTitle = course.Title
-                            });
+                           emailModel: new
+                           {
+                               FullName = student.FullName,
+                               Amount = transaction.Amount,
+                               Currency = transaction.Currency,
+                               Reference = transaction.Reference,
+                               PaidAt = transaction.PaidAt ?? DateTime.UtcNow,
+                               CourseTitle = course.Title,
+                               PlatformName = _config["App:Name"] ?? "SkillHive"
+                           });
                     }
                 }
             }

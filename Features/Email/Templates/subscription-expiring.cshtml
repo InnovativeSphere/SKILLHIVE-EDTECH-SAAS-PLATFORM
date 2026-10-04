@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; padding:0; background:#f4f4f4; font-family: Arial, sans-serif; }
+    .container { max-width:600px; margin:20px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+    .header { background-color:#D96600; padding:24px; text-align:center; color:#ffffff; }
+    .header h1 { margin:0; font-size:20px; letter-spacing:1px; }
+    .content { padding:32px; color:#333333; text-align:left; }
+    .content h2 { margin-top:0; color:#D96600; text-align:center; }
+    .content p { line-height:1.6; }
+    .alert { margin:24px 0; padding:16px 20px; background:#FFF8E1; border-left:4px solid #D96600; border-radius:4px; color:#6B4F00; }
+    .plan-box { margin:24px 0; padding:20px; background:#FAFAFA; border-left:4px solid #2D2D2D; border-radius:4px; }
+    .plan-box p { margin:8px 0; font-size:14px; }
+    .plan-box strong { color:#2D2D2D; display:inline-block; min-width:120px; }
+    .days-badge { text-align:center; margin:24px 0; padding:24px; background:#FFF8E1; border:2px dashed #D96600; border-radius:8px; }
+    .days-badge .number { font-size:42px; font-weight:bold; color:#D96600; line-height:1; }
+    .days-badge .label { font-size:14px; color:#6B4F00; margin-top:8px; }
+    .cta { text-align:center; margin:32px 0; }
+    .cta a { display:inline-block; padding:14px 32px; background:#D96600; color:#ffffff; text-decoration:none; border-radius:6px; font-weight:bold; }
+    .footer { background:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#666666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>@Model.PlatformName</h1>
+    </div>
+    <div class="content">
+      <h2>Your Subscription Is Expiring</h2>
+      <p>Hi @Model.OwnerName,</p>
+
+      <div class="alert">
+        Your subscription for <strong>@Model.AcademyName</strong> ends soon. Renew now to avoid any interruption.
+      </div>
+
+      <div class="days-badge">
+        <div class="number">@Model.DaysRemaining</div>
+        <div class="label">day(s) remaining</div>
+      </div>
+
+      <div class="plan-box">
+        <p><strong>Plan:</strong> @Model.PlanName</p>
+        <p><strong>Expires:</strong> @Model.EndDate.ToString("MMMM dd, yyyy")</p>
+      </div>
+
+      <p style="text-align:center; color:#666666;">Renewal takes less than a minute. Your courses, students, and data all stay exactly as they are.</p>
+
+      <div class="cta">
+        <a href="@Model.RenewalUrl">Renew Now</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>&copy; @DateTime.UtcNow.Year @Model.PlatformName. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; padding:0; background:#f4f4f4; font-family: Arial, sans-serif; }
+    .container { max-width:600px; margin:20px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+    .header { background-color:#2D2D2D; padding:24px; text-align:center; color:#ffffff; }
+    .header h1 { margin:0; font-size:20px; letter-spacing:1px; }
+    .content { padding:32px; color:#333333; text-align:left; }
+    .content h2 { margin-top:0; color:#2D2D2D; text-align:center; }
+    .content p { line-height:1.6; }
+    .course-card { margin:24px 0; padding:20px; background:#FAFAFA; border-left:4px solid #2D2D2D; border-radius:4px; }
+    .course-card h3 { margin:0 0 8px 0; color:#2D2D2D; font-size:18px; }
+    .course-card p { margin:4px 0; color:#666666; font-size:14px; }
+    .cta { text-align:center; margin:32px 0; }
+    .cta a { display:inline-block; padding:14px 32px; background:#2D2D2D; color:#ffffff; text-decoration:none; border-radius:6px; font-weight:bold; }
+    .footer { background:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#666666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>@Model.PlatformName</h1>
+    </div>
+    <div class="content">
+      <h2>You're Enrolled!</h2>
+      <p>Hi @Model.FullName,</p>
+      <p>You've successfully enrolled in a new course. Here are the details:</p>
+
+      <div class="course-card">
+        <h3>@Model.CourseTitle</h3>
+        <p><strong>Academy:</strong> @Model.AcademyName</p>
+        <p><strong>Enrolled:</strong> @Model.EnrolledAt.ToString("MMMM dd, yyyy")</p>
+      </div>
+
+      <p>Jump in whenever you're ready. Your progress is tracked automatically as you complete lessons.</p>
+
+      <div class="cta">
+        <a href="#">Go to Course</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>&copy; @DateTime.UtcNow.Year @Model.PlatformName. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

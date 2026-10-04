@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin:0; padding:0; background:#f4f4f4; font-family: Arial, sans-serif; }
+    .container { max-width:600px; margin:20px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+    .header { background-color:#2D2D2D; padding:24px; text-align:center; color:#ffffff; }
+    .header h1 { margin:0; font-size:20px; letter-spacing:1px; }
+    .content { padding:32px; color:#333333; text-align:left; }
+    .content h2 { margin-top:0; color:#2D2D2D; text-align:center; }
+    .content p { line-height:1.6; }
+    .request-card { margin:24px 0; padding:20px; background:#FAFAFA; border-left:4px solid #D96600; border-radius:4px; }
+    .request-card p { margin:8px 0; font-size:14px; }
+    .request-card strong { color:#2D2D2D; display:inline-block; min-width:120px; }
+    .reason { margin:16px 0; padding:16px; background:#FFF8E1; border-radius:6px; font-style:italic; color:#6B4F00; }
+    .cta { text-align:center; margin:32px 0; }
+    .cta a { display:inline-block; padding:14px 32px; background:#2D2D2D; color:#ffffff; text-decoration:none; border-radius:6px; font-weight:bold; }
+    .footer { background:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#666666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>@Model.PlatformName</h1>
+    </div>
+    <div class="content">
+      <h2>Certificate Reissue Request</h2>
+      <p>Hi @Model.OwnerName,</p>
+      <p>A student has requested a certificate reissue for one of your courses.</p>
+
+      <div class="request-card">
+        <p><strong>Student:</strong> @Model.StudentName</p>
+        <p><strong>Email:</strong> @Model.StudentEmail</p>
+        <p><strong>Course:</strong> @Model.CourseTitle</p>
+        <p><strong>Requested:</strong> @Model.RequestedAt.ToString("MMMM dd, yyyy HH:mm")</p>
+      </div>
+
+      <p>Reason provided:</p>
+      <div class="reason">"@Model.Reason"</div>
+
+      <p>You can approve or decline this request from your academy dashboard.</p>
+
+      <div class="cta">
+        <a href="#">Review Request</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>&copy; @DateTime.UtcNow.Year @Model.PlatformName. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
