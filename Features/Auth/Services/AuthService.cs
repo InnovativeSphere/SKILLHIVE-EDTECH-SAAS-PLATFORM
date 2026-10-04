@@ -305,6 +305,55 @@ namespace SkillHive.Features.Auth.Services
             };
         }
 
+                // ─── Refresh Token (sliding window) ───────────────────────
+        /// <summary>
+        /// Sliding-window refresh: as long as the current token is still valid,
+        /// issue a new one with a fresh 7-day expiry. Client should call this
+        /// periodically (e.g. once per day) to keep the session alive indefinitely.
+        /// If the current token has already expired, the client must re-login.
+        /// </summary>
+        public async Task<object> RefreshTokenAsync(int userId)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+
+            if (user == null)
+                throw new InvalidOperationException("User not found");
+
+            if (user.Status == UserStatus.INACTIVE)
+                throw new UnauthorizedAccessException("Your account has been deactivated");
+
+            if (user.Status == UserStatus.LOCKED)
+                throw new UnauthorizedAccessException("Your account is locked");
+
+            if (user.Status == UserStatus.SUSPENDED)
+                throw new UnauthorizedAccessException("Your account is suspended");
+
+            if (user.Status == UserStatus.INVITED)
+                throw new UnauthorizedAccessException("Your invite has not been accepted yet");
+
+            var token = _jwt.GenerateToken(
+                user.UserId,
+                user.Email,
+                user.Role.ToString(),
+                user.AcademyId);
+
+            return new
+            {
+                token,
+                expiresIn = "7d",
+                user = new
+                {
+                    userId = user.UserId,
+                    fullName = user.FullName,
+                    email = user.Email,
+                    username = user.Username,
+                    role = user.Role.ToString(),
+                    academyId = user.AcademyId,
+                    emailVerified = user.EmailVerified
+                }
+            };
+        }
+
         // ─── Verify OTP (Academy Owner) ────────────────────────────
         public async Task<object> VerifyOtpAsync(VerifyOtpDto dto)
         {

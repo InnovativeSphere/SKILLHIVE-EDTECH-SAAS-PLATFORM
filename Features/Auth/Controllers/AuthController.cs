@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SkillHive.Common;
 using SkillHive.Features.Auth.DTOs;
@@ -81,6 +82,43 @@ namespace SkillHive.Features.Auth.Controllers
                 return ApiResponse.Error();
             }
         }
+
+                [HttpPost("refresh")]
+        [Authorize]
+        public async Task<IActionResult> Refresh()
+        {
+            try
+            {
+                var userId = JwtHelper.GetUserId(User);
+                var result = await _authService.RefreshTokenAsync(userId);
+
+                // Reset the cookie with a fresh 7-day expiry
+                var token = (string)result.GetType().GetProperty("token")!.GetValue(result)!;
+
+                Response.Cookies.Append("AuthToken", token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = Request.IsHttps,
+                    SameSite = SameSiteMode.Lax,
+                    Expires = DateTimeOffset.UtcNow.AddDays(7)
+                });
+
+                return ApiResponse.Success(result, "Token refreshed");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResponse.Unauthorized(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResponse.BadRequest(ex.Message);
+            }
+            catch (Exception)
+            {
+                return ApiResponse.Error();
+            }
+        }
+
 
         [HttpPost("logout")]
         public IActionResult Logout()
