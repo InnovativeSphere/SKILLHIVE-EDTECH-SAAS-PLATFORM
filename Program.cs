@@ -60,6 +60,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendDev", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:3000",
+                "https://localhost:3000",
+                "http://127.0.0.1:3000"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 // Custom services
 builder.Services.AddSingleton<Logger>();
@@ -108,12 +122,17 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseMiddleware<RawBodyMiddleware>();
 
 // Cookie-to-header bridge: if Authorization header is missing but AuthToken cookie exists,
 // copy it to the header so JWT validation works for both Bearer and cookie clients.
 app.UseMiddleware<CookieAuthMiddleware>();
+app.UseCors("FrontendDev"); 
 
 app.UseAuthentication();
 app.UseAuthorization();

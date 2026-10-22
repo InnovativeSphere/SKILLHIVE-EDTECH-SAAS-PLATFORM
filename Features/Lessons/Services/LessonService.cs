@@ -61,7 +61,7 @@ namespace SkillHive.Features.Lessons.Services
         }
 
         // ─── Get Single Lesson (with content) ──────────────────────
-        public async Task<object> GetLessonAsync(int lessonId, bool isStaff, int? requesterAcademyId)
+        public async Task<object> GetLessonAsync(int lessonId, int userId, bool isStaff, int? requesterAcademyId)
         {
             var lesson = await _db.Lessons
                 .Include(l => l.Course)
@@ -81,9 +81,16 @@ namespace SkillHive.Features.Lessons.Services
                     throw new InvalidOperationException("Lesson not found");
 
                 // Non-staff can only read content of preview lessons OR enrolled students
-                // (Enrollment check comes later — for now only preview lessons expose content)
                 if (!lesson.IsPreview)
-                    throw new InvalidOperationException("You must be enrolled to view this lesson's content");
+                {
+                    var isEnrolled = await _db.Enrollments
+                        .AnyAsync(e => e.StudentId == userId 
+                                       && e.CourseId == lesson.CourseId
+                                       && (e.Status == EnrollmentStatus.ACTIVE || e.Status == EnrollmentStatus.COMPLETED));
+
+                    if (!isEnrolled)
+                        throw new InvalidOperationException("You must be enrolled to view this lesson's content");
+                }
             }
 
             return new

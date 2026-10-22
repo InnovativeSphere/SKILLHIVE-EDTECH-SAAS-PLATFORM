@@ -49,13 +49,14 @@ namespace SkillHive.Features.Lessons.Controllers
         {
             try
             {
+                var userId = JwtHelper.GetUserId(User);
                 var academyId = JwtHelper.GetAcademyId(User);
                 var roleStr = JwtHelper.GetRole(User);
                 var isStaff = roleStr == UserRole.ACADEMY_OWNER.ToString()
                               || roleStr == UserRole.INSTRUCTOR.ToString()
                               || roleStr == UserRole.MODERATOR.ToString();
 
-                var result = await _lessonService.GetLessonAsync(id, isStaff, academyId);
+                var result = await _lessonService.GetLessonAsync(id, userId, isStaff, academyId);
                 return ApiResponse.Success(result);
             }
             catch (InvalidOperationException ex)
